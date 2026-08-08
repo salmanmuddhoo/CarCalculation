@@ -42,15 +42,52 @@ export const GROUP_LABELS: Record<CostGroup, string> = {
   other: "Other charges",
 };
 
+// --- Fuel / powertrain type --------------------------------------------------
+
+export type FuelType = "petrol" | "diesel" | "hybrid" | "electric";
+
+export const FUEL_TYPES: FuelType[] = ["petrol", "diesel", "hybrid", "electric"];
+
+export const FUEL_LABELS: Record<FuelType, string> = {
+  petrol: "Petrol",
+  diesel: "Diesel",
+  hybrid: "Hybrid",
+  electric: "Electric",
+};
+
 // --- Default CC-based rate tables --------------------------------------------
 
-// Excise duty rate on cars by engine capacity (illustrative defaults — verify with MRA).
-export const DEFAULT_EXCISE_BRACKETS: CcBracket[] = [
-  { maxCc: 1000, value: 0.15 },
-  { maxCc: 1600, value: 0.45 },
-  { maxCc: 2000, value: 0.75 },
-  { maxCc: null, value: 1.0 },
-];
+// Excise duty rate on cars by engine capacity AND fuel type.
+// Verified for hybrid ≤1600cc = 35% from an MRA customs declaration (Toyota
+// Yaris Hybrid, 1490cc, HS 8703.40.93). Other rates are the conventional-car
+// bands and should be confirmed with MRA for the specific case.
+export const DEFAULT_EXCISE_TABLES: Record<FuelType, CcBracket[]> = {
+  petrol: [
+    { maxCc: 1000, value: 0.15 },
+    { maxCc: 1600, value: 0.45 },
+    { maxCc: 2000, value: 0.75 },
+    { maxCc: null, value: 1.0 },
+  ],
+  diesel: [
+    { maxCc: 1000, value: 0.15 },
+    { maxCc: 1600, value: 0.45 },
+    { maxCc: 2000, value: 0.75 },
+    { maxCc: null, value: 1.0 },
+  ],
+  hybrid: [
+    { maxCc: 1600, value: 0.35 },
+    { maxCc: 2000, value: 0.5 },
+    { maxCc: null, value: 0.7 },
+  ],
+  electric: [{ maxCc: null, value: 0 }],
+};
+
+// Backwards-compatible default (conventional petrol bands).
+export const DEFAULT_EXCISE_BRACKETS: CcBracket[] = DEFAULT_EXCISE_TABLES.petrol;
+
+// Import Customs Duty (ICD) rate on cars. 0% in the observed declaration; kept
+// editable because it applies before excise when non-zero.
+export const DEFAULT_ICD_RATE = 0;
 
 // First registration fee by engine capacity in Rs (illustrative defaults — verify with NLTA).
 export const DEFAULT_REGISTRATION_BRACKETS: CcBracket[] = [
@@ -87,26 +124,44 @@ export function lookupBracket(brackets: CcBracket[], cc: number): number {
 // --- Excise + VAT estimate ---------------------------------------------------
 
 export interface DutyEstimate {
+  icdAmount: number;
+  exciseRate: number;
   exciseAmount: number;
   vatAmount: number;
   total: number;
 }
 
 /**
- * Estimate excise duty and VAT from the CIF value (in Rs) and engine capacity.
- * Excise applies to CIF; VAT applies to (CIF + excise). This is an approximation
- * of the MRA method and ignores CO2 rebate/levy and hybrid concessions — use the
- * manual figure from MRA when you have it.
+ * Estimate ICD, excise duty and VAT from the customs-assessed value (in Rs) and
+ * engine capacity, following the MRA method seen on the customs declaration:
+ *
+ *   ICD    = icdRate  x customsValue
+ *   Excise = exciseRate x (customsValue + ICD)
+ *   VAT    = 15%      x (customsValue + ICD + Excise)
+ *
+ * The customs value is what MRA assesses the vehicle at — usually lower than the
+ * price paid. It ignores CO2 rebate/levy; use the exact MRA figure when you
+ * have the declaration.
  */
 export function estimateDuty(
-  cifMru: number,
+  customsValue: number,
   cc: number,
   exciseBrackets: CcBracket[],
+  icdRate: number = DEFAULT_ICD_RATE,
 ): DutyEstimate {
-  const rate = lookupBracket(exciseBrackets, cc);
-  const exciseAmount = Math.round(cifMru * rate);
-  const vatAmount = Math.round((cifMru + exciseAmount) * VAT_RATE);
-  return { exciseAmount, vatAmount, total: exciseAmount + vatAmount };
+  const icdAmount = Math.round(customsValue * icdRate);
+  const exciseRate = lookupBracket(exciseBrackets, cc);
+  const exciseAmount = Math.round((customsValue + icdAmount) * exciseRate);
+  const vatAmount = Math.round(
+    (customsValue + icdAmount + exciseAmount) * VAT_RATE,
+  );
+  return {
+    icdAmount,
+    exciseRate,
+    exciseAmount,
+    vatAmount,
+    total: icdAmount + exciseAmount + vatAmount,
+  };
 }
 
 // --- Default estimate (matches the recorded example car) ---------------------

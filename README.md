@@ -18,15 +18,38 @@ configuration.
 
 ## Where the figures come from
 
-The rate tables ship with **illustrative default values** and are fully
-editable in the UI:
+The rate tables ship with **default values** and are fully editable in the UI.
 
-- **Excise duty & VAT** — from the **MRA** (Mauritius Revenue Authority).
-  Enter the MRA figure directly, or use the cc-based estimate as a starting
-  point. The estimate applies excise on CIF and 15% VAT on (CIF + excise); it
-  does not account for CO₂ rebate/levy or hybrid concessions.
-- **Registration fee & road tax** — from the **NLTA** (National Land Transport
-  Authority), based on engine capacity.
+### Excise duty & VAT (MRA)
+
+The estimator follows the exact method on the MRA Customs Declaration Form:
+
+```
+ICD    = ICD rate    × customs value          (0% for cars in the observed case)
+Excise = excise rate × (customs value + ICD)
+VAT    = 15%         × (customs value + ICD + excise)
+```
+
+Two things matter here:
+
+- **Fuel type changes the excise rate.** A hybrid attracts a lower rate than an
+  equivalent petrol car. Verified from a real declaration: a **1490cc Toyota
+  Yaris Hybrid** (HS `8703.40.93`) is charged **35% excise** — where a
+  conventional 1490cc petrol car would be 45%. Pick the fuel/powertrain type in
+  the app and the matching excise table is used.
+- **Customs value ≠ price paid.** MRA assesses its own customs value (in the
+  verified case Rs 347,956, versus Rs 487,013 actually paid), and duty is based
+  on that assessed value. Enter it separately, or click **“= CIF”** to start
+  from the converted price.
+
+The conventional petrol/diesel bands (15/45/75/100% by cc) and the hybrid bands
+above 1600cc are editable defaults — confirm them with MRA for your case. The
+estimate does not model the CO₂ rebate/levy.
+
+### Registration fee & road tax (NLTA)
+
+From the **NLTA** (National Land Transport Authority), based on engine
+capacity. These ship as illustrative defaults — confirm with NLTA.
 
 Always confirm the current figures against MRA and NLTA before relying on a
 number.
@@ -48,9 +71,10 @@ Open <http://localhost:3000>.
 
 ## The recorded example
 
-The app is pre-filled with the example car used to build it (CIF Rs 487,013,
-1490 cc), which produces a total landed cost of roughly **Rs 785,000**. Click
-**Reset to example** at any time to return to it.
+The app is pre-filled with the example car used to build it — a 1490cc Toyota
+Yaris Hybrid, customs value Rs 347,956 — whose excise + VAT computes to exactly
+**Rs 192,246** (matching its MRA declaration) and a total landed cost of roughly
+**Rs 785,000**. Click **Reset to example** at any time to return to it.
 
 ## Tech
 

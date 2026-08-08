@@ -4,9 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CcBracket,
   CostGroup,
-  DEFAULT_EXCISE_BRACKETS,
+  DEFAULT_EXCISE_TABLES,
+  DEFAULT_ICD_RATE,
   DEFAULT_REGISTRATION_BRACKETS,
   DEFAULT_ROAD_TAX_BRACKETS,
+  FUEL_LABELS,
+  FUEL_TYPES,
+  FuelType,
   GROUP_LABELS,
   LineItem,
   VAT_RATE,
@@ -18,15 +22,18 @@ import {
   newLineItem,
 } from "@/lib/calc";
 
-const STORAGE_KEY = "car-import-calc:v1";
+const STORAGE_KEY = "car-import-calc:v2";
 
 interface Persisted {
   carName: string;
   cifJpy: number;
   jpyRate: number;
   cc: number;
+  fuelType: FuelType;
+  customsValue: number;
+  icdRate: number;
   items: LineItem[];
-  exciseBrackets: CcBracket[];
+  exciseTables: Record<FuelType, CcBracket[]>;
   registrationBrackets: CcBracket[];
   roadTaxBrackets: CcBracket[];
 }
@@ -54,8 +61,11 @@ export default function Home() {
   const [cifJpy, setCifJpy] = useState(1680000);
   const [jpyRate, setJpyRate] = useState(0.29);
   const [cc, setCc] = useState(1490);
+  const [fuelType, setFuelType] = useState<FuelType>("hybrid");
+  const [customsValue, setCustomsValue] = useState(347956);
+  const [icdRate, setIcdRate] = useState(DEFAULT_ICD_RATE);
   const [items, setItems] = useState<LineItem[]>(defaultLineItems());
-  const [exciseBrackets, setExciseBrackets] = useState(DEFAULT_EXCISE_BRACKETS);
+  const [exciseTables, setExciseTables] = useState(DEFAULT_EXCISE_TABLES);
   const [registrationBrackets, setRegistrationBrackets] = useState(
     DEFAULT_REGISTRATION_BRACKETS,
   );
@@ -71,8 +81,11 @@ export default function Home() {
     if (s.cifJpy !== undefined) setCifJpy(s.cifJpy);
     if (s.jpyRate !== undefined) setJpyRate(s.jpyRate);
     if (s.cc !== undefined) setCc(s.cc);
+    if (s.fuelType !== undefined) setFuelType(s.fuelType);
+    if (s.customsValue !== undefined) setCustomsValue(s.customsValue);
+    if (s.icdRate !== undefined) setIcdRate(s.icdRate);
     if (s.items) setItems(s.items);
-    if (s.exciseBrackets) setExciseBrackets(s.exciseBrackets);
+    if (s.exciseTables) setExciseTables(s.exciseTables);
     if (s.registrationBrackets) setRegistrationBrackets(s.registrationBrackets);
     if (s.roadTaxBrackets) setRoadTaxBrackets(s.roadTaxBrackets);
     setLoaded(true);
@@ -86,8 +99,11 @@ export default function Home() {
       cifJpy,
       jpyRate,
       cc,
+      fuelType,
+      customsValue,
+      icdRate,
       items,
-      exciseBrackets,
+      exciseTables,
       registrationBrackets,
       roadTaxBrackets,
     };
@@ -102,17 +118,21 @@ export default function Home() {
     cifJpy,
     jpyRate,
     cc,
+    fuelType,
+    customsValue,
+    icdRate,
     items,
-    exciseBrackets,
+    exciseTables,
     registrationBrackets,
     roadTaxBrackets,
   ]);
 
   const cifMru = useMemo(() => Math.round(cifJpy * jpyRate), [cifJpy, jpyRate]);
 
+  const exciseBrackets = exciseTables[fuelType];
   const dutyEstimate = useMemo(
-    () => estimateDuty(cifMru, cc, exciseBrackets),
-    [cifMru, cc, exciseBrackets],
+    () => estimateDuty(customsValue, cc, exciseBrackets, icdRate),
+    [customsValue, cc, exciseBrackets, icdRate],
   );
   const registrationEstimate = useMemo(
     () => lookupBracket(registrationBrackets, cc),
@@ -161,10 +181,17 @@ export default function Home() {
     setCifJpy(1680000);
     setJpyRate(0.29);
     setCc(1490);
+    setFuelType("hybrid");
+    setCustomsValue(347956);
+    setIcdRate(DEFAULT_ICD_RATE);
     setItems(defaultLineItems());
-    setExciseBrackets(DEFAULT_EXCISE_BRACKETS);
+    setExciseTables(DEFAULT_EXCISE_TABLES);
     setRegistrationBrackets(DEFAULT_REGISTRATION_BRACKETS);
     setRoadTaxBrackets(DEFAULT_ROAD_TAX_BRACKETS);
+  }
+
+  function setExciseBracketsForFuel(b: CcBracket[]) {
+    setExciseTables((prev) => ({ ...prev, [fuelType]: b }));
   }
 
   return (
@@ -202,6 +229,19 @@ export default function Home() {
               onChange={(e) => setCc(Number(e.target.value))}
               className="input"
             />
+          </Field>
+          <Field label="Fuel / powertrain type">
+            <select
+              value={fuelType}
+              onChange={(e) => setFuelType(e.target.value as FuelType)}
+              className="input"
+            >
+              {FUEL_TYPES.map((f) => (
+                <option key={f} value={f}>
+                  {FUEL_LABELS[f]}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label="Car cost in Japan — CIF (JPY)">
             <input
@@ -250,15 +290,79 @@ export default function Home() {
           figures when you have them — click “Use” to copy an estimate into the
           cost line below.
         </p>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <EstimateCard
-            title="Excise duty + VAT"
-            value={dutyEstimate.total}
-            sub={`Excise ${formatRs(dutyEstimate.exciseAmount)} + VAT ${formatRs(
-              dutyEstimate.vatAmount,
-            )}`}
-            onUse={() => applyEstimate("excise")}
-          />
+
+        {/* Duty computation (MRA method) */}
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Customs-assessed value for duty (Rs)">
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={customsValue || ""}
+                  onChange={(e) => setCustomsValue(Number(e.target.value))}
+                  className="input"
+                />
+                <button
+                  onClick={() => setCustomsValue(cifMru)}
+                  title="Set equal to the converted CIF"
+                  className="no-print shrink-0 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  = CIF
+                </button>
+              </div>
+            </Field>
+            <Field label="Import customs duty — ICD (%)">
+              <input
+                type="number"
+                step="1"
+                value={Math.round(icdRate * 100)}
+                onChange={(e) => setIcdRate(Number(e.target.value) / 100)}
+                className="input"
+              />
+            </Field>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">
+            MRA assesses its own customs value (often lower than the price paid).
+            Excise rate for a {formatNumber(cc)}cc {FUEL_LABELS[fuelType]} car:{" "}
+            <span className="font-semibold text-slate-500">
+              {(dutyEstimate.exciseRate * 100).toFixed(0)}%
+            </span>
+            .
+          </p>
+          <dl className="mt-3 space-y-1 border-t border-slate-200 pt-3 text-sm">
+            <BreakdownRow label="Customs value" value={formatRs(customsValue)} />
+            {icdRate > 0 && (
+              <BreakdownRow
+                label={`Import customs duty (${(icdRate * 100).toFixed(0)}%)`}
+                value={formatRs(dutyEstimate.icdAmount)}
+              />
+            )}
+            <BreakdownRow
+              label={`Excise duty (${(dutyEstimate.exciseRate * 100).toFixed(
+                0,
+              )}%)`}
+              value={formatRs(dutyEstimate.exciseAmount)}
+            />
+            <BreakdownRow
+              label={`VAT (${(VAT_RATE * 100).toFixed(0)}%)`}
+              value={formatRs(dutyEstimate.vatAmount)}
+            />
+            <div className="flex items-center justify-between border-t border-slate-200 pt-1.5 font-semibold text-slate-800">
+              <dt>Total duties + VAT</dt>
+              <dd className="flex items-center gap-2 tabular-nums">
+                {formatRs(dutyEstimate.total)}
+                <button
+                  onClick={() => applyEstimate("excise")}
+                  className="no-print rounded bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand hover:bg-brand/20"
+                >
+                  Use
+                </button>
+              </dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <EstimateCard
             title="Registration"
             value={registrationEstimate}
@@ -276,11 +380,11 @@ export default function Home() {
         {showRates && (
           <div className="no-print mt-5 grid grid-cols-1 gap-5 border-t border-slate-100 pt-5 lg:grid-cols-3">
             <RateTableEditor
-              title="Excise duty rate"
+              title={`Excise duty rate — ${FUEL_LABELS[fuelType]}`}
               unit="%"
               isPercent
               brackets={exciseBrackets}
-              onChange={setExciseBrackets}
+              onChange={setExciseBracketsForFuel}
             />
             <RateTableEditor
               title="Registration fee (Rs)"
@@ -432,6 +536,15 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+function BreakdownRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between text-slate-500">
+      <dt>{label}</dt>
+      <dd className="tabular-nums">{value}</dd>
+    </div>
   );
 }
 
