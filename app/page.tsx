@@ -6,7 +6,6 @@ import {
   CcBracket,
   CostGroup,
   DEFAULT_EXCISE_SCHEDULE,
-  DEFAULT_ICD_RATE,
   DEFAULT_REGISTRATION_BRACKETS,
   DEFAULT_ROAD_TAX_BRACKETS,
   ExciseSchedule,
@@ -27,7 +26,7 @@ import {
   resolveExciseRate,
 } from "@/lib/calc";
 
-const STORAGE_KEY = "car-import-calc:v7";
+const STORAGE_KEY = "car-import-calc:v8";
 
 const MCB_RATES_URL = "https://www.mcb.mu";
 const MRA_FOB_URL = "http://eservices6.mra.mu/choice.asp";
@@ -46,8 +45,6 @@ interface Persisted {
   freightRs: number;
   insuranceRs: number;
   otherCostsRs: number;
-  customsValue: number;
-  icdRate: number;
   items: LineItem[];
   exciseSchedule: ExciseSchedule;
   registrationBrackets: CcBracket[];
@@ -81,8 +78,6 @@ export default function Home() {
   const [freightRs, setFreightRs] = useState(40950);
   const [insuranceRs, setInsuranceRs] = useState(5142);
   const [otherCostsRs, setOtherCostsRs] = useState(1517);
-  const [customsValue, setCustomsValue] = useState(347956);
-  const [icdRate, setIcdRate] = useState(DEFAULT_ICD_RATE);
   const [items, setItems] = useState<LineItem[]>(defaultLineItems());
   const [exciseSchedule, setExciseSchedule] = useState(DEFAULT_EXCISE_SCHEDULE);
   const [registrationBrackets, setRegistrationBrackets] = useState(
@@ -109,8 +104,6 @@ export default function Home() {
     if (s.freightRs !== undefined) setFreightRs(s.freightRs);
     if (s.insuranceRs !== undefined) setInsuranceRs(s.insuranceRs);
     if (s.otherCostsRs !== undefined) setOtherCostsRs(s.otherCostsRs);
-    if (s.customsValue !== undefined) setCustomsValue(s.customsValue);
-    if (s.icdRate !== undefined) setIcdRate(s.icdRate);
     if (s.items) setItems(s.items);
     if (s.exciseSchedule) setExciseSchedule(s.exciseSchedule);
     if (s.registrationBrackets) setRegistrationBrackets(s.registrationBrackets);
@@ -135,8 +128,6 @@ export default function Home() {
       freightRs,
       insuranceRs,
       otherCostsRs,
-      customsValue,
-      icdRate,
       items,
       exciseSchedule,
       registrationBrackets,
@@ -162,8 +153,6 @@ export default function Home() {
     freightRs,
     insuranceRs,
     otherCostsRs,
-    customsValue,
-    icdRate,
     items,
     exciseSchedule,
     registrationBrackets,
@@ -200,9 +189,10 @@ export default function Home() {
   const hasSubTypeChoice = subTypes.length > 1;
 
   const exciseRate = resolveExciseRate(spec, cc, powerKw);
+  // The customs value (CIF) built above is the duty base.
   const dutyEstimate = useMemo(
-    () => estimateDuty(customsValue, exciseRate, icdRate),
-    [customsValue, exciseRate, icdRate],
+    () => estimateDuty(builtCif, exciseRate),
+    [builtCif, exciseRate],
   );
   const registrationEstimate = useMemo(
     () => lookupBracket(registrationBrackets, cc),
@@ -289,8 +279,6 @@ export default function Home() {
     setFreightRs(40950);
     setInsuranceRs(5142);
     setOtherCostsRs(1517);
-    setCustomsValue(347956);
-    setIcdRate(DEFAULT_ICD_RATE);
     setItems(defaultLineItems());
     setExciseSchedule(DEFAULT_EXCISE_SCHEDULE);
     setRegistrationBrackets(DEFAULT_REGISTRATION_BRACKETS);
@@ -448,37 +436,8 @@ export default function Home() {
 
         {/* Duty computation (MRA method) */}
         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Customs-assessed value for duty (Rs)">
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  value={customsValue || ""}
-                  onChange={(e) => setCustomsValue(Number(e.target.value))}
-                  className="input"
-                />
-                <button
-                  onClick={() => setCustomsValue(cifMru)}
-                  title="Set equal to the price you paid (CIF at the MCB rate)"
-                  className="no-print shrink-0 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 hover:bg-slate-50"
-                >
-                  = paid
-                </button>
-              </div>
-            </Field>
-            <Field label="Import customs duty — ICD (%)">
-              <input
-                type="number"
-                step="1"
-                value={Math.round(icdRate * 100)}
-                onChange={(e) => setIcdRate(Number(e.target.value) / 100)}
-                className="input"
-              />
-            </Field>
-          </div>
-
           {/* Customs value (CIF) builder — reproduces the MRA declaration */}
-          <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white/60 p-3">
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white/60 p-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-slate-600">
                 Build the customs value (CIF)
@@ -545,16 +504,8 @@ export default function Home() {
               <BreakdownRow label="+ Insurance" value={formatRs(insuranceRs)} />
               <BreakdownRow label="+ Other costs" value={formatRs(otherCostsRs)} />
               <div className="flex items-center justify-between border-t border-slate-200 pt-1.5 text-sm font-semibold text-slate-800">
-                <dt>Computed customs value (CIF)</dt>
-                <dd className="flex items-center gap-2 tabular-nums">
-                  {formatRs(builtCif)}
-                  <button
-                    onClick={() => setCustomsValue(builtCif)}
-                    className="no-print rounded bg-brand px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-brand-dark"
-                  >
-                    Use
-                  </button>
-                </dd>
+                <dt>Customs value (CIF) — duty base</dt>
+                <dd className="tabular-nums">{formatRs(builtCif)}</dd>
               </div>
             </dl>
             <p className="mt-2 text-[11px] text-slate-400">
@@ -569,12 +520,11 @@ export default function Home() {
               </a>
               . Customs converts it at its own rate (≈ 0.315 on the sample
               declaration — distinct from the MCB rate) and adds freight,
-              insurance & other costs. Click <strong>Use</strong> to apply it as
-              the customs value above.
+              insurance & other costs. This computed CIF is used directly as the
+              duty base below.
             </p>
           </div>
           <p className="mt-2 text-[11px] text-slate-400">
-            MRA assesses its own customs value (often lower than the price paid).
             Excise rate for a {dimLabel} {CATEGORY_LABELS[category].toLowerCase()}{" "}
             ({powertrain.label}
             {hasSubTypeChoice ? `, ${subType.label}` : ""}):{" "}
@@ -584,13 +534,10 @@ export default function Home() {
             .
           </p>
           <dl className="mt-3 space-y-1 border-t border-slate-200 pt-3 text-sm">
-            <BreakdownRow label="Customs value" value={formatRs(customsValue)} />
-            {icdRate > 0 && (
-              <BreakdownRow
-                label={`Import customs duty (${(icdRate * 100).toFixed(0)}%)`}
-                value={formatRs(dutyEstimate.icdAmount)}
-              />
-            )}
+            <BreakdownRow
+              label="Customs value (CIF)"
+              value={formatRs(builtCif)}
+            />
             <BreakdownRow
               label={`Excise duty (${(exciseRate * 100).toFixed(0)}%)`}
               value={formatRs(dutyEstimate.exciseAmount)}

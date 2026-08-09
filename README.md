@@ -22,12 +22,12 @@ The rate tables ship with **default values** and are fully editable in the UI.
 
 ### Excise duty & VAT (MRA)
 
-The estimator follows the exact method on the MRA Customs Declaration Form:
+The estimator follows the exact method on the MRA Customs Declaration Form
+(import customs duty on cars is 0%, so it drops out):
 
 ```
-ICD    = ICD rate    × customs value          (0% for cars in the observed case)
-Excise = excise rate × (customs value + ICD)
-VAT    = 15%         × (customs value + ICD + excise)
+Excise = excise rate × customs value
+VAT    = 15%         × (customs value + excise)
 ```
 
 Two things matter here:
@@ -59,11 +59,10 @@ Two things matter here:
   | **Customs value (CIF)** | **347,956** |
 
   Look up the assessed FOB in JPY on
-  [MRA e-Services](http://eservices6.mra.mu/choice.asp), fill the builder, and
-  click **Use**. Note customs converts the FOB at **its own exchange rate**
-  (0.315 here), which differs from the MCB selling rate you pay. The customs
-  value field also stays editable, or you can click **“= paid”** to seed it from
-  the price paid.
+  [MRA e-Services](http://eservices6.mra.mu/choice.asp) and fill the builder —
+  the computed CIF is used directly as the duty base. Note customs converts the
+  FOB at **its own exchange rate** (0.315 here), which differs from the MCB
+  selling rate you pay.
 
 The app covers **motor cars, pick-ups, vans and lorries**. Pick the vehicle
 category, powertrain, and (where relevant) body/cabin type — the matching
