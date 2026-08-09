@@ -48,8 +48,22 @@ estimate does not model the CO₂ rebate/levy.
 
 ### Registration fee & road tax (NLTA)
 
-From the **NLTA** (National Land Transport Authority), based on engine
-capacity. These ship as illustrative defaults — confirm with NLTA.
+From the **NLTA** (National Land Transport Authority), based on engine capacity.
+
+**Road tax** uses the official NLTA figures (Motor Vehicle Licences communiqué,
+effective **01 July 2025**) — Mauritius, 12-month licence, section 1 (private
+motorcar / dual-purpose / double-cab, including hybrid & electric):
+
+| Engine capacity | Road tax (12 months) |
+| --------------- | -------------------- |
+| ≤ 1250 cc       | Rs 4,500             |
+| 1251 – 1600 cc  | Rs 5,000             |
+| 1601 – 1850 cc  | Rs 10,000            |
+| 1851 – 2250 cc  | Rs 12,000            |
+| Above 2250 cc   | Rs 15,000            |
+
+**Registration fee** still ships as an illustrative default — confirm with
+NLTA.
 
 Always confirm the current figures against MRA and NLTA before relying on a
 number.

@@ -22,7 +22,7 @@ import {
   newLineItem,
 } from "@/lib/calc";
 
-const STORAGE_KEY = "car-import-calc:v2";
+const STORAGE_KEY = "car-import-calc:v3";
 
 interface Persisted {
   carName: string;
@@ -372,7 +372,7 @@ export default function Home() {
           <EstimateCard
             title="Road tax"
             value={roadTaxEstimate}
-            sub="NLTA annual road tax"
+            sub="NLTA 12-month (Mauritius)"
             onUse={() => applyEstimate("roadtax")}
           />
         </div>
