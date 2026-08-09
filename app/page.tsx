@@ -33,7 +33,7 @@ import {
   resolveExciseRate,
 } from "@/lib/calc";
 
-const STORAGE_KEY = "car-import-calc:v9";
+const STORAGE_KEY = "car-import-calc:v10";
 
 const MCB_RATES_URL = "https://www.mcb.mu";
 const MRA_FOB_URL = "http://eservices6.mra.mu/choice.asp";
@@ -268,7 +268,21 @@ export default function Home() {
     () => items.reduce((sum, i) => sum + (Number(i.amount) || 0), 0),
     [items],
   );
-  const grandTotal = cifMru + itemsTotal;
+
+  // Computed taxes & duties, shown as read-only rows in the breakdown.
+  const derivedTaxRows = useMemo(
+    () => [
+      { label: "Excise duty + VAT (MRA)", amount: dutyEstimate.total },
+      {
+        label: `${CATEGORY_LABELS[category]} registration (NLTA)`,
+        amount: registrationEstimate,
+      },
+      { label: "Road tax (NLTA)", amount: roadTaxEstimate },
+    ],
+    [dutyEstimate.total, registrationEstimate, roadTaxEstimate, category],
+  );
+  const derivedTaxesTotal = derivedTaxRows.reduce((s, r) => s + r.amount, 0);
+  const grandTotal = cifMru + derivedTaxesTotal + itemsTotal;
 
   // --- selection handlers keep powertrain/sub-type valid ---------------------
   function changeCategory(next: VehicleCategory) {
@@ -309,20 +323,6 @@ export default function Home() {
   }
   function addItem(group: CostGroup) {
     setItems((prev) => [...prev, newLineItem(group)]);
-  }
-
-  function applyEstimate(kind: "excise" | "registration" | "roadtax") {
-    setItems((prev) =>
-      prev.map((i) => {
-        if (kind === "excise" && i.label.startsWith("Excise"))
-          return { ...i, amount: dutyEstimate.total };
-        if (kind === "registration" && i.label.startsWith("Car registration"))
-          return { ...i, amount: registrationEstimate };
-        if (kind === "roadtax" && i.label.startsWith("Road tax"))
-          return { ...i, amount: roadTaxEstimate };
-        return i;
-      }),
-    );
   }
 
   function resetAll() {
@@ -614,15 +614,7 @@ export default function Home() {
             />
             <div className="flex items-center justify-between border-t border-slate-200 pt-1.5 font-semibold text-slate-800">
               <dt>Total duties + VAT</dt>
-              <dd className="flex items-center gap-2 tabular-nums">
-                {formatRs(dutyEstimate.total)}
-                <button
-                  onClick={() => applyEstimate("excise")}
-                  className="no-print rounded bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand hover:bg-brand/20"
-                >
-                  Use
-                </button>
-              </dd>
+              <dd className="tabular-nums">{formatRs(dutyEstimate.total)}</dd>
             </div>
           </dl>
         </div>
@@ -652,15 +644,7 @@ export default function Home() {
             />
             <div className="flex items-center justify-between border-t border-slate-200 pt-1.5 font-semibold text-slate-800">
               <dt>Registration duty</dt>
-              <dd className="flex items-center gap-2 tabular-nums">
-                {formatRs(registrationEstimate)}
-                <button
-                  onClick={() => applyEstimate("registration")}
-                  className="no-print rounded bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand hover:bg-brand/20"
-                >
-                  Use
-                </button>
-              </dd>
+              <dd className="tabular-nums">{formatRs(registrationEstimate)}</dd>
             </div>
           </dl>
         </div>
@@ -670,7 +654,6 @@ export default function Home() {
             title="Road tax"
             value={roadTaxEstimate}
             sub="NLTA 12-month (Mauritius, by cc)"
-            onUse={() => applyEstimate("roadtax")}
           />
         </div>
 
@@ -746,10 +729,10 @@ export default function Home() {
         <div className="space-y-6">
           {GROUP_ORDER.map((group) => {
             const groupItems = items.filter((i) => i.group === group);
-            const groupTotal = groupItems.reduce(
-              (s, i) => s + (Number(i.amount) || 0),
-              0,
-            );
+            const derivedRows = group === "taxes" ? derivedTaxRows : [];
+            const groupTotal =
+              derivedRows.reduce((s, r) => s + r.amount, 0) +
+              groupItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
             return (
               <div key={group}>
                 <div className="mb-2 flex items-center justify-between">
@@ -761,6 +744,22 @@ export default function Home() {
                   </span>
                 </div>
                 <div className="space-y-2">
+                  {derivedRows.map((row) => (
+                    <div
+                      key={row.label}
+                      className="flex items-center gap-2 rounded-lg border border-teal-100 bg-teal-50/60 px-3 py-2"
+                    >
+                      <span className="flex-1 text-sm text-slate-700">
+                        {row.label}
+                      </span>
+                      <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-teal-700">
+                        auto
+                      </span>
+                      <span className="w-28 text-right text-sm font-medium tabular-nums text-slate-800">
+                        {formatRs(row.amount)}
+                      </span>
+                    </div>
+                  ))}
                   {groupItems.map((item) => (
                     <div
                       key={item.id}
@@ -816,6 +815,10 @@ export default function Home() {
           <div className="flex justify-between text-slate-300">
             <span>Vehicle CIF (converted)</span>
             <span className="tabular-nums">{formatRs(cifMru)}</span>
+          </div>
+          <div className="flex justify-between text-slate-300">
+            <span>Taxes &amp; duties (auto)</span>
+            <span className="tabular-nums">{formatRs(derivedTaxesTotal)}</span>
           </div>
           <div className="flex justify-between text-slate-300">
             <span>All other charges</span>
@@ -911,24 +914,14 @@ function EstimateCard({
   title,
   value,
   sub,
-  onUse,
 }: {
   title: string;
   value: number;
   sub: string;
-  onUse: () => void;
 }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-      <div className="flex items-start justify-between">
-        <span className="text-xs font-medium text-slate-500">{title}</span>
-        <button
-          onClick={onUse}
-          className="no-print rounded bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand hover:bg-brand/20"
-        >
-          Use
-        </button>
-      </div>
+      <span className="text-xs font-medium text-slate-500">{title}</span>
       <div className="mt-1 text-lg font-bold text-slate-800 tabular-nums">
         {formatRs(value)}
       </div>
