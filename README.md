@@ -147,6 +147,32 @@ Worked example (1490cc hybrid): 52,000 × 0.5 = 26,000 → × 1.30 = 33,800 →
 Always confirm the current figures against MRA and NLTA before relying on a
 number.
 
+## Client quote: profit, cash vs lease
+
+Below the landed cost you set a **Profit** and get the **Selling price (quote to
+client)** = landed cost + profit. A **Client pays by** toggle handles the two
+sale types:
+
+- **Cash** — the calculation is as recorded; the **Excess VAT** is the fixed
+  figure you enter (default Rs 11,289).
+- **Lease** — the leasing company is invoiced 15% VAT on the **full selling
+  price**, so the excess VAT is recomputed as
+  `15% × selling price − customs VAT (already paid)` and included in the total.
+  Because the selling price includes that excess VAT plus your profit, it is
+  solved as `selling price = (base cost + profit − customs VAT) / 0.85`.
+
+Worked example (base cost Rs 772,877, customs VAT Rs 70,461, profit Rs 100,000):
+
+| | Cash | Lease |
+| --- | --- | --- |
+| Excess VAT | 11,289 (fixed) | 71,142 (computed) |
+| Total landed cost | 784,166 | 844,019 |
+| Selling price (quote) | 884,166 | 944,019 |
+| Lease invoice VAT (15%) | — | 141,603 |
+
+For the lease row, `15% × 944,019 = 141,603 = 71,142 excess VAT + 70,461 customs
+VAT`, exactly as intended.
+
 ## Getting started
 
 ```bash

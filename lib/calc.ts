@@ -355,6 +355,65 @@ export function estimateDuty(
   };
 }
 
+// --- Client quote (cash vs lease) --------------------------------------------
+
+export type ClientType = "cash" | "lease";
+
+/** Fixed excess VAT for a cash client (editable). */
+export const DEFAULT_EXCESS_VAT = 11289;
+
+export interface QuoteResult {
+  /** All costs except excess VAT. */
+  baseCost: number;
+  /** Effective excess VAT: the fixed figure for cash, computed for lease. */
+  excessVat: number;
+  /** baseCost + excessVat. */
+  landedCost: number;
+  profit: number;
+  /** landedCost + profit — the price quoted to the client. */
+  sellingPrice: number;
+  /** 15% of the selling price — the VAT shown on a lease invoice. */
+  vatOnSellingPrice: number;
+}
+
+/**
+ * Build the client quote.
+ *
+ * - **Cash**: excess VAT is the fixed figure the importer records.
+ * - **Lease**: the leasing company is invoiced 15% VAT on the full selling
+ *   price, so the excess VAT owed = 15% × selling price − VAT already paid at
+ *   customs. Because the selling price = landed cost + profit and the landed
+ *   cost itself includes this excess VAT, the selling price solves
+ *   `S = (baseCost + profit − customsVat) / (1 − 0.15)`.
+ */
+export function computeQuote(
+  baseCost: number,
+  clientType: ClientType,
+  fixedExcessVat: number,
+  customsVat: number,
+  profit: number,
+): QuoteResult {
+  const p = Number(profit) || 0;
+  let excessVat: number;
+  if (clientType === "lease") {
+    const sellingPrice = (baseCost + p - customsVat) / (1 - VAT_RATE);
+    excessVat = Math.max(0, Math.round(VAT_RATE * sellingPrice - customsVat));
+  } else {
+    excessVat = Number(fixedExcessVat) || 0;
+  }
+  const landedCost = baseCost + excessVat;
+  const sellingPrice = landedCost + p;
+  const vatOnSellingPrice = Math.round(VAT_RATE * sellingPrice);
+  return {
+    baseCost,
+    excessVat,
+    landedCost,
+    profit: p,
+    sellingPrice,
+    vatOnSellingPrice,
+  };
+}
+
 // --- Default estimate (matches the recorded example car) ---------------------
 
 let idCounter = 0;
@@ -373,8 +432,9 @@ export function defaultLineItems(): LineItem[] {
     { id: nid("paint"), label: "Car paint", amount: 3500, group: "preparation" },
     { id: nid("nettoyage"), label: "Nettoyage (cleaning)", amount: 0, group: "preparation" },
     { id: nid("worker"), label: "Worker fee", amount: 0, group: "preparation" },
+    // Excess VAT is handled separately (fixed for cash clients, computed for
+    // lease clients) — it is not a generic line item here.
     { id: nid("plate"), label: "Car plate number", amount: 1000, group: "other" },
-    { id: nid("excessvat"), label: "Excess VAT", amount: 11289, group: "other" },
     { id: nid("additional"), label: "Additional", amount: 5000, group: "other" },
     { id: nid("rectification"), label: "Rectification", amount: 1500, group: "other" },
   ];
