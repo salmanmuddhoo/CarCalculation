@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CATEGORY_LABELS,
   CcBracket,
+  ClientType,
   CostGroup,
+  DEFAULT_EXCESS_VAT,
   DEFAULT_EXCISE_SCHEDULE,
   DEFAULT_REG_CAR_ICE_BRACKETS,
   DEFAULT_REG_DOC_FEE,
@@ -23,6 +25,7 @@ import {
   VEHICLE_CATEGORIES,
   VehicleCategory,
   baseRegistrationDuty,
+  computeQuote,
   computeRegistration,
   defaultLineItems,
   estimateDuty,
@@ -33,7 +36,7 @@ import {
   resolveExciseRate,
 } from "@/lib/calc";
 
-const STORAGE_KEY = "car-import-calc:v10";
+const STORAGE_KEY = "car-import-calc:v11";
 
 const MCB_RATES_URL = "https://www.mcb.mu";
 const MRA_FOB_URL = "http://eservices6.mra.mu/choice.asp";
@@ -52,6 +55,9 @@ interface Persisted {
   freightRs: number;
   insuranceRs: number;
   otherCostsRs: number;
+  clientType: ClientType;
+  profit: number;
+  excessVatManual: number;
   items: LineItem[];
   exciseSchedule: ExciseSchedule;
   regCarIceBrackets: CcBracket[];
@@ -90,6 +96,9 @@ export default function Home() {
   const [freightRs, setFreightRs] = useState(40950);
   const [insuranceRs, setInsuranceRs] = useState(5142);
   const [otherCostsRs, setOtherCostsRs] = useState(1517);
+  const [clientType, setClientType] = useState<ClientType>("cash");
+  const [profit, setProfit] = useState(0);
+  const [excessVatManual, setExcessVatManual] = useState(DEFAULT_EXCESS_VAT);
   const [items, setItems] = useState<LineItem[]>(defaultLineItems());
   const [exciseSchedule, setExciseSchedule] = useState(DEFAULT_EXCISE_SCHEDULE);
   const [regCarIceBrackets, setRegCarIceBrackets] = useState(
@@ -123,6 +132,9 @@ export default function Home() {
     if (s.freightRs !== undefined) setFreightRs(s.freightRs);
     if (s.insuranceRs !== undefined) setInsuranceRs(s.insuranceRs);
     if (s.otherCostsRs !== undefined) setOtherCostsRs(s.otherCostsRs);
+    if (s.clientType !== undefined) setClientType(s.clientType);
+    if (s.profit !== undefined) setProfit(s.profit);
+    if (s.excessVatManual !== undefined) setExcessVatManual(s.excessVatManual);
     if (s.items) setItems(s.items);
     if (s.exciseSchedule) setExciseSchedule(s.exciseSchedule);
     if (s.regCarIceBrackets) setRegCarIceBrackets(s.regCarIceBrackets);
@@ -153,6 +165,9 @@ export default function Home() {
       freightRs,
       insuranceRs,
       otherCostsRs,
+      clientType,
+      profit,
+      excessVatManual,
       items,
       exciseSchedule,
       regCarIceBrackets,
@@ -183,6 +198,9 @@ export default function Home() {
     freightRs,
     insuranceRs,
     otherCostsRs,
+    clientType,
+    profit,
+    excessVatManual,
     items,
     exciseSchedule,
     regCarIceBrackets,
@@ -282,7 +300,24 @@ export default function Home() {
     [dutyEstimate.total, registrationEstimate, roadTaxEstimate, category],
   );
   const derivedTaxesTotal = derivedTaxRows.reduce((s, r) => s + r.amount, 0);
-  const grandTotal = cifMru + derivedTaxesTotal + itemsTotal;
+
+  // Client quote: cash uses the fixed excess VAT, lease recomputes it from the
+  // selling price. baseCost is everything except the excess VAT.
+  const baseCost = cifMru + derivedTaxesTotal + itemsTotal;
+  const quote = useMemo(
+    () =>
+      computeQuote(
+        baseCost,
+        clientType,
+        excessVatManual,
+        dutyEstimate.vatAmount,
+        profit,
+      ),
+    [baseCost, clientType, excessVatManual, dutyEstimate.vatAmount, profit],
+  );
+  const excessVat = quote.excessVat;
+  const landedCost = quote.landedCost;
+  const sellingPrice = quote.sellingPrice;
 
   // --- selection handlers keep powertrain/sub-type valid ---------------------
   function changeCategory(next: VehicleCategory) {
@@ -340,6 +375,9 @@ export default function Home() {
     setFreightRs(40950);
     setInsuranceRs(5142);
     setOtherCostsRs(1517);
+    setClientType("cash");
+    setProfit(0);
+    setExcessVatManual(DEFAULT_EXCESS_VAT);
     setItems(defaultLineItems());
     setExciseSchedule(DEFAULT_EXCISE_SCHEDULE);
     setRegCarIceBrackets(DEFAULT_REG_CAR_ICE_BRACKETS);
@@ -728,10 +766,12 @@ export default function Home() {
 
         <div className="space-y-6">
           {GROUP_ORDER.map((group) => {
+            const isTaxes = group === "taxes";
             const groupItems = items.filter((i) => i.group === group);
-            const derivedRows = group === "taxes" ? derivedTaxRows : [];
+            const derivedRows = isTaxes ? derivedTaxRows : [];
             const groupTotal =
               derivedRows.reduce((s, r) => s + r.amount, 0) +
+              (isTaxes ? excessVat : 0) +
               groupItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
             return (
               <div key={group}>
@@ -760,6 +800,38 @@ export default function Home() {
                       </span>
                     </div>
                   ))}
+                  {isTaxes &&
+                    (clientType === "lease" ? (
+                      <div className="flex items-center gap-2 rounded-lg border border-teal-100 bg-teal-50/60 px-3 py-2">
+                        <span className="flex-1 text-sm text-slate-700">
+                          Excess VAT (lease)
+                        </span>
+                        <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-teal-700">
+                          auto
+                        </span>
+                        <span className="w-28 text-right text-sm font-medium tabular-nums text-slate-800">
+                          {formatRs(excessVat)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-2 py-1.5">
+                        <span className="min-w-0 flex-1 px-1 py-1 text-sm text-slate-700">
+                          Excess VAT
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-slate-400">Rs</span>
+                          <input
+                            type="number"
+                            value={excessVatManual || ""}
+                            onChange={(e) =>
+                              setExcessVatManual(Number(e.target.value))
+                            }
+                            className="w-28 rounded border border-slate-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-brand focus:outline-none"
+                          />
+                        </div>
+                        <span className="w-6" />
+                      </div>
+                    ))}
                   {groupItems.map((item) => (
                     <div
                       key={item.id}
@@ -811,25 +883,87 @@ export default function Home() {
 
       {/* Totals */}
       <section className="mb-6 rounded-xl bg-slate-900 p-5 text-white shadow-sm">
+        {/* Client / payment type */}
+        <div className="no-print mb-4 flex items-center justify-between gap-3">
+          <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            Client pays by
+          </span>
+          <div className="inline-flex rounded-lg bg-white/10 p-0.5">
+            {(["cash", "lease"] as ClientType[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => setClientType(t)}
+                className={`rounded-md px-3 py-1 text-xs font-semibold capitalize transition ${
+                  clientType === t
+                    ? "bg-white text-slate-900"
+                    : "text-slate-300 hover:text-white"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="space-y-2 text-sm">
           <div className="flex justify-between text-slate-300">
             <span>Vehicle CIF (converted)</span>
             <span className="tabular-nums">{formatRs(cifMru)}</span>
           </div>
           <div className="flex justify-between text-slate-300">
-            <span>Taxes &amp; duties (auto)</span>
-            <span className="tabular-nums">{formatRs(derivedTaxesTotal)}</span>
+            <span>
+              Taxes, duties &amp; excess VAT
+              {clientType === "lease" ? " (lease)" : ""}
+            </span>
+            <span className="tabular-nums">
+              {formatRs(derivedTaxesTotal + excessVat)}
+            </span>
           </div>
           <div className="flex justify-between text-slate-300">
             <span>All other charges</span>
             <span className="tabular-nums">{formatRs(itemsTotal)}</span>
           </div>
-          <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
-            <span className="text-base font-semibold">Total landed cost</span>
-            <span className="text-2xl font-bold tabular-nums">
-              {formatRs(grandTotal)}
+          <div className="flex items-center justify-between border-t border-white/10 pt-2">
+            <span className="font-semibold">Total landed cost</span>
+            <span className="text-lg font-bold tabular-nums">
+              {formatRs(landedCost)}
             </span>
           </div>
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <span className="font-medium text-emerald-300">Profit</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-slate-400">Rs</span>
+              <input
+                type="number"
+                value={profit || ""}
+                onChange={(e) => setProfit(Number(e.target.value))}
+                placeholder="0"
+                className="w-32 rounded border border-white/20 bg-white/10 px-2 py-1 text-right text-sm font-semibold tabular-nums text-white placeholder:text-slate-500 focus:border-emerald-300 focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-3">
+            <span className="text-base font-semibold">
+              Selling price (quote to client)
+            </span>
+            <span className="text-2xl font-bold tabular-nums text-emerald-300">
+              {formatRs(sellingPrice)}
+            </span>
+          </div>
+          {clientType === "lease" && (
+            <div className="mt-1 rounded-lg bg-white/5 px-3 py-2 text-[11px] text-slate-400">
+              Lease invoice VAT (15% of selling price):{" "}
+              <span className="font-semibold text-slate-200">
+                {formatRs(quote.vatOnSellingPrice)}
+              </span>{" "}
+              — of which excess VAT to remit (over the{" "}
+              {formatRs(dutyEstimate.vatAmount)} customs VAT) ={" "}
+              <span className="font-semibold text-slate-200">
+                {formatRs(excessVat)}
+              </span>
+              .
+            </div>
+          )}
         </div>
       </section>
 
