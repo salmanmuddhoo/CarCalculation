@@ -98,14 +98,16 @@ export const DEFAULT_REGISTRATION_BRACKETS: CcBracket[] = [
   { maxCc: null, value: 100000 },
 ];
 
-// Annual road tax by engine capacity in Rs (illustrative defaults — verify with NLTA).
+// Road tax (12-month licence) by engine capacity in Rs. Official NLTA figures
+// for Mauritius from the Motor Vehicle Licences communiqué effective
+// 01 July 2025, section 1 (motorcar / dual-purpose / double-cab, including
+// hybrid and electric — NOT company/trade-name registered).
 export const DEFAULT_ROAD_TAX_BRACKETS: CcBracket[] = [
-  { maxCc: 1000, value: 5000 },
-  { maxCc: 1250, value: 6000 },
-  { maxCc: 1500, value: 8000 },
-  { maxCc: 1600, value: 13000 },
-  { maxCc: 2000, value: 20000 },
-  { maxCc: null, value: 30000 },
+  { maxCc: 1250, value: 4500 },
+  { maxCc: 1600, value: 5000 },
+  { maxCc: 1850, value: 10000 },
+  { maxCc: 2250, value: 12000 },
+  { maxCc: null, value: 15000 },
 ];
 
 /** Look up the bracket value for a given engine capacity. */
