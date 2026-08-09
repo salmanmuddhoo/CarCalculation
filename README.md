@@ -115,13 +115,16 @@ From the **NLTA** (National Land Transport Authority), based on engine capacity.
 effective **01 July 2025**) — Mauritius, 12-month licence, section 1 (private
 motorcar / dual-purpose / double-cab, including hybrid & electric):
 
-| Engine capacity | Road tax (12 months) |
-| --------------- | -------------------- |
-| ≤ 1250 cc       | Rs 4,500             |
-| 1251 – 1600 cc  | Rs 5,000             |
-| 1601 – 1850 cc  | Rs 10,000            |
-| 1851 – 2250 cc  | Rs 12,000            |
-| Above 2250 cc   | Rs 15,000            |
+| Engine capacity | Power output (electric) | Road tax (12 months) |
+| --------------- | ----------------------- | -------------------- |
+| ≤ 1250 cc       | ≤ 40.0 kW               | Rs 4,500             |
+| 1251 – 1600 cc  | 40.1 – 57.5 kW          | Rs 5,000             |
+| 1601 – 1850 cc  | 57.6 – 71.5 kW          | Rs 10,000            |
+| 1851 – 2250 cc  | 71.6 – 90.0 kW          | Rs 12,000            |
+| Above 2250 cc   | Above 90.0 kW           | Rs 15,000            |
+
+Electric vehicles have no engine capacity, so their road tax is looked up by
+**power output (kW)** using the column above (e.g. a 210 kW EV → Rs 15,000).
 
 **Registration duty** is computed from the official Registration Duty schedule
 (GN 75/2009, "First Registration in Mauritius" column):

@@ -300,6 +300,16 @@ export const DEFAULT_ROAD_TAX_BRACKETS: CcBracket[] = [
   { maxCc: null, value: 15000 },
 ];
 
+// Road tax by power output (kW) — the same NLTA table's "Power Output" column,
+// used for electric vehicles (which have no engine capacity).
+export const DEFAULT_ROAD_TAX_KW_BRACKETS: CcBracket[] = [
+  { maxCc: 40, value: 4500 },
+  { maxCc: 57.5, value: 5000 },
+  { maxCc: 71.5, value: 10000 },
+  { maxCc: 90, value: 12000 },
+  { maxCc: null, value: 15000 },
+];
+
 /** Look up the bracket value for a given engine capacity. */
 export function lookupBracket(brackets: CcBracket[], cc: number): number {
   const sorted = [...brackets].sort((a, b) => {
