@@ -363,10 +363,9 @@ const nid = (seed: string) => `${seed}-${idCounter++}`;
 export function defaultLineItems(): LineItem[] {
   idCounter = 0;
   return [
+    // Excise + VAT, registration and road tax are NOT listed here — they are
+    // computed automatically and shown as read-only rows in the taxes group.
     { id: nid("permit"), label: "Showroom permit", amount: 25000, group: "shipping" },
-    { id: nid("excise"), label: "Excise duty + VAT (MRA)", amount: 192246, group: "taxes", derived: true },
-    { id: nid("registration"), label: "Car registration (NLTA)", amount: 36500, group: "taxes", derived: true },
-    { id: nid("roadtax"), label: "Road tax (NLTA)", amount: 5000, group: "taxes", derived: true },
     { id: nid("broker"), label: "Broker fee", amount: 4500, group: "shipping" },
     { id: nid("boat"), label: "Boat / MOL freight", amount: 10611, group: "shipping" },
     { id: nid("insurance"), label: "Insurance / TEM / fitness / gate pass", amount: 820, group: "preparation" },

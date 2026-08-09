@@ -8,9 +8,11 @@ configuration.
 
 - Converts the **CIF cost in JPY** to Mauritian Rupees using the **MCB selling
   rate** (editable; defaults to 0.32, with a link to check MCB's rates).
-- Estimates **excise duty + VAT**, **registration fee**, and **road tax** from
-  the engine capacity (cc) using editable rate tables.
-- Lets you enter every real-world charge as an editable line item
+- **Automatically computes and populates** the **excise duty + VAT**,
+  **registration duty**, and **road tax** in the cost breakdown (shown as
+  read-only “auto” rows) — no manual step. They update live as you change the
+  vehicle details.
+- Lets you enter every other real-world charge as an editable line item
   (showroom permit, broker, boat/MOL freight, insurance/TEM/fitness, paint,
   plate, excess VAT, rectification, etc.).
 - Shows a live **total landed cost** and can print / save as PDF.
