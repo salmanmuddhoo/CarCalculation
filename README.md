@@ -32,19 +32,32 @@ VAT    = 15%         × (customs value + ICD + excise)
 
 Two things matter here:
 
-- **Fuel type changes the excise rate.** A hybrid attracts a lower rate than an
-  equivalent petrol car. Verified from a real declaration: a **1490cc Toyota
-  Yaris Hybrid** (HS `8703.40.93`) is charged **35% excise** — where a
-  conventional 1490cc petrol car would be 45%. Pick the fuel/powertrain type in
-  the app and the matching excise table is used.
+- **Fuel type changes the excise rate**, and **electric is rated by power (kW),
+  not cc**. Pick the powertrain in the app and the matching official table is
+  used. Verified from a real declaration: a **1490cc Toyota Yaris Hybrid**
+  (HS `8703.40.93`) is charged **35% excise**.
 - **Customs value ≠ price paid.** MRA assesses its own customs value (in the
   verified case Rs 347,956, versus Rs 487,013 actually paid), and duty is based
   on that assessed value. Enter it separately, or click **“= CIF”** to start
   from the converted price.
 
-The conventional petrol/diesel bands (15/45/75/100% by cc) and the hybrid bands
-above 1600cc are editable defaults — confirm them with MRA for your case. The
-estimate does not model the CO₂ rebate/levy.
+Official MRA excise rates for motor cars (VAT is 15% in every band), built in as
+editable defaults:
+
+| Engine capacity | ICE (petrol/diesel) | Mild / full hybrid | Plug-in hybrid |
+| --------------- | ------------------- | ------------------ | -------------- |
+| ≤ 550 cc        | 0%                  | 0%                 | 0%             |
+| 551 – 1,000 cc  | 45%                 | 25%                | 15%            |
+| 1,001 – 1,600 cc| 55%                 | 35%                | 25%            |
+| 1,601 – 2,000 cc| 75%                 | 55%                | 35%            |
+| Above 2,000 cc  | 100%                | 75%                | 55%            |
+
+| Electric (by power) | Excise |
+| ------------------- | ------ |
+| ≤ 180 kW            | 15%    |
+| Above 180 kW        | 25%    |
+
+The estimate does not model the CO₂ rebate/levy or duty-exemption concessions.
 
 ### Registration fee & road tax (NLTA)
 

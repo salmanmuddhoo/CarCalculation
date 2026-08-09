@@ -11,6 +11,7 @@ import {
   FUEL_LABELS,
   FUEL_TYPES,
   FuelType,
+  RATED_BY_KW,
   GROUP_LABELS,
   LineItem,
   VAT_RATE,
@@ -22,13 +23,14 @@ import {
   newLineItem,
 } from "@/lib/calc";
 
-const STORAGE_KEY = "car-import-calc:v3";
+const STORAGE_KEY = "car-import-calc:v4";
 
 interface Persisted {
   carName: string;
   cifJpy: number;
   jpyRate: number;
   cc: number;
+  powerKw: number;
   fuelType: FuelType;
   customsValue: number;
   icdRate: number;
@@ -61,6 +63,7 @@ export default function Home() {
   const [cifJpy, setCifJpy] = useState(1680000);
   const [jpyRate, setJpyRate] = useState(0.29);
   const [cc, setCc] = useState(1490);
+  const [powerKw, setPowerKw] = useState(100);
   const [fuelType, setFuelType] = useState<FuelType>("hybrid");
   const [customsValue, setCustomsValue] = useState(347956);
   const [icdRate, setIcdRate] = useState(DEFAULT_ICD_RATE);
@@ -81,6 +84,7 @@ export default function Home() {
     if (s.cifJpy !== undefined) setCifJpy(s.cifJpy);
     if (s.jpyRate !== undefined) setJpyRate(s.jpyRate);
     if (s.cc !== undefined) setCc(s.cc);
+    if (s.powerKw !== undefined) setPowerKw(s.powerKw);
     if (s.fuelType !== undefined) setFuelType(s.fuelType);
     if (s.customsValue !== undefined) setCustomsValue(s.customsValue);
     if (s.icdRate !== undefined) setIcdRate(s.icdRate);
@@ -99,6 +103,7 @@ export default function Home() {
       cifJpy,
       jpyRate,
       cc,
+      powerKw,
       fuelType,
       customsValue,
       icdRate,
@@ -118,6 +123,7 @@ export default function Home() {
     cifJpy,
     jpyRate,
     cc,
+    powerKw,
     fuelType,
     customsValue,
     icdRate,
@@ -129,10 +135,13 @@ export default function Home() {
 
   const cifMru = useMemo(() => Math.round(cifJpy * jpyRate), [cifJpy, jpyRate]);
 
+  const isElectric = fuelType === RATED_BY_KW;
   const exciseBrackets = exciseTables[fuelType];
+  // Electric cars are rated by power output (kW); every other type by cc.
+  const exciseLookupValue = isElectric ? powerKw : cc;
   const dutyEstimate = useMemo(
-    () => estimateDuty(customsValue, cc, exciseBrackets, icdRate),
-    [customsValue, cc, exciseBrackets, icdRate],
+    () => estimateDuty(customsValue, exciseLookupValue, exciseBrackets, icdRate),
+    [customsValue, exciseLookupValue, exciseBrackets, icdRate],
   );
   const registrationEstimate = useMemo(
     () => lookupBracket(registrationBrackets, cc),
@@ -181,6 +190,7 @@ export default function Home() {
     setCifJpy(1680000);
     setJpyRate(0.29);
     setCc(1490);
+    setPowerKw(100);
     setFuelType("hybrid");
     setCustomsValue(347956);
     setIcdRate(DEFAULT_ICD_RATE);
@@ -243,6 +253,16 @@ export default function Home() {
               ))}
             </select>
           </Field>
+          {isElectric && (
+            <Field label="Power rating (kW) — for electric excise">
+              <input
+                type="number"
+                value={powerKw || ""}
+                onChange={(e) => setPowerKw(Number(e.target.value))}
+                className="input"
+              />
+            </Field>
+          )}
           <Field label="Car cost in Japan — CIF (JPY)">
             <input
               type="number"
@@ -323,7 +343,11 @@ export default function Home() {
           </div>
           <p className="mt-2 text-[11px] text-slate-400">
             MRA assesses its own customs value (often lower than the price paid).
-            Excise rate for a {formatNumber(cc)}cc {FUEL_LABELS[fuelType]} car:{" "}
+            Excise rate for a{" "}
+            {isElectric
+              ? `${formatNumber(powerKw)}kW`
+              : `${formatNumber(cc)}cc`}{" "}
+            {FUEL_LABELS[fuelType]} car:{" "}
             <span className="font-semibold text-slate-500">
               {(dutyEstimate.exciseRate * 100).toFixed(0)}%
             </span>
@@ -382,6 +406,7 @@ export default function Home() {
             <RateTableEditor
               title={`Excise duty rate — ${FUEL_LABELS[fuelType]}`}
               unit="%"
+              thresholdUnit={isElectric ? "kW" : "cc"}
               isPercent
               brackets={exciseBrackets}
               onChange={setExciseBracketsForFuel}
@@ -584,12 +609,14 @@ function RateTableEditor({
   brackets,
   onChange,
   isPercent = false,
+  thresholdUnit = "cc",
 }: {
   title: string;
   unit: string;
   brackets: CcBracket[];
   onChange: (b: CcBracket[]) => void;
   isPercent?: boolean;
+  thresholdUnit?: string;
 }) {
   function update(idx: number, patch: Partial<CcBracket>) {
     onChange(brackets.map((b, i) => (i === idx ? { ...b, ...patch } : b)));
@@ -618,7 +645,7 @@ function RateTableEditor({
               }
               className="w-20 rounded border border-slate-200 px-1.5 py-1 text-right tabular-nums focus:border-brand focus:outline-none"
             />
-            <span className="text-slate-400">cc →</span>
+            <span className="text-slate-400">{thresholdUnit} →</span>
             <input
               type="number"
               step={isPercent ? "1" : "500"}

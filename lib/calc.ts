@@ -44,46 +44,78 @@ export const GROUP_LABELS: Record<CostGroup, string> = {
 
 // --- Fuel / powertrain type --------------------------------------------------
 
-export type FuelType = "petrol" | "diesel" | "hybrid" | "electric";
+export type FuelType =
+  | "ice"
+  | "mild_hybrid"
+  | "hybrid"
+  | "plugin_hybrid"
+  | "electric";
 
-export const FUEL_TYPES: FuelType[] = ["petrol", "diesel", "hybrid", "electric"];
+export const FUEL_TYPES: FuelType[] = [
+  "ice",
+  "mild_hybrid",
+  "hybrid",
+  "plugin_hybrid",
+  "electric",
+];
 
 export const FUEL_LABELS: Record<FuelType, string> = {
-  petrol: "Petrol",
-  diesel: "Diesel",
+  ice: "Petrol / Diesel (ICE)",
+  mild_hybrid: "Mild hybrid",
   hybrid: "Hybrid",
+  plugin_hybrid: "Plug-in hybrid",
   electric: "Electric",
 };
 
-// --- Default CC-based rate tables --------------------------------------------
+/** Electric excise is rated by power output (kW), so its brackets are keyed by
+ *  kW rather than engine capacity. Every other type is keyed by cc. */
+export const RATED_BY_KW: FuelType = "electric";
 
-// Excise duty rate on cars by engine capacity AND fuel type.
-// Verified for hybrid ≤1600cc = 35% from an MRA customs declaration (Toyota
-// Yaris Hybrid, 1490cc, HS 8703.40.93). Other rates are the conventional-car
-// bands and should be confirmed with MRA for the specific case.
+// --- Default excise tables (official MRA rates for motor cars) ----------------
+//
+// Source: MRA "Rate of excise duty and taxes on motor vehicles" — Motor Cars
+// (transport of not more than 10 persons incl. the driver). For each type the
+// `maxCc` threshold is engine capacity in cc, except Electric where it is the
+// power rating in kW. Cross-checked against a real declaration: Hybrid
+// 1,001–1,600cc = 35% (Toyota Yaris Hybrid, 1490cc). VAT is 15% in every band.
 export const DEFAULT_EXCISE_TABLES: Record<FuelType, CcBracket[]> = {
-  petrol: [
-    { maxCc: 1000, value: 0.15 },
-    { maxCc: 1600, value: 0.45 },
+  ice: [
+    { maxCc: 550, value: 0 },
+    { maxCc: 1000, value: 0.45 },
+    { maxCc: 1600, value: 0.55 },
     { maxCc: 2000, value: 0.75 },
     { maxCc: null, value: 1.0 },
   ],
-  diesel: [
-    { maxCc: 1000, value: 0.15 },
-    { maxCc: 1600, value: 0.45 },
-    { maxCc: 2000, value: 0.75 },
-    { maxCc: null, value: 1.0 },
+  mild_hybrid: [
+    { maxCc: 550, value: 0 },
+    { maxCc: 1000, value: 0.25 },
+    { maxCc: 1600, value: 0.35 },
+    { maxCc: 2000, value: 0.55 },
+    { maxCc: null, value: 0.75 },
   ],
   hybrid: [
+    { maxCc: 550, value: 0 },
+    { maxCc: 1000, value: 0.25 },
     { maxCc: 1600, value: 0.35 },
-    { maxCc: 2000, value: 0.5 },
-    { maxCc: null, value: 0.7 },
+    { maxCc: 2000, value: 0.55 },
+    { maxCc: null, value: 0.75 },
   ],
-  electric: [{ maxCc: null, value: 0 }],
+  plugin_hybrid: [
+    { maxCc: 550, value: 0 },
+    { maxCc: 1000, value: 0.15 },
+    { maxCc: 1600, value: 0.25 },
+    { maxCc: 2000, value: 0.35 },
+    { maxCc: null, value: 0.55 },
+  ],
+  // Keyed by power output in kW, not cc.
+  electric: [
+    { maxCc: 180, value: 0.15 },
+    { maxCc: null, value: 0.25 },
+  ],
 };
 
-// Backwards-compatible default (conventional petrol bands).
-export const DEFAULT_EXCISE_BRACKETS: CcBracket[] = DEFAULT_EXCISE_TABLES.petrol;
+// Backwards-compatible default (conventional ICE bands).
+export const DEFAULT_EXCISE_BRACKETS: CcBracket[] = DEFAULT_EXCISE_TABLES.ice;
 
 // Import Customs Duty (ICD) rate on cars. 0% in the observed declaration; kept
 // editable because it applies before excise when non-zero.
