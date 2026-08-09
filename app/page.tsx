@@ -6,7 +6,12 @@ import {
   CcBracket,
   CostGroup,
   DEFAULT_EXCISE_SCHEDULE,
-  DEFAULT_REGISTRATION_BRACKETS,
+  DEFAULT_REG_CAR_ICE_BRACKETS,
+  DEFAULT_REG_DOC_FEE,
+  DEFAULT_REG_ELECTRIC_KW_BRACKETS,
+  DEFAULT_REG_HP_FEE,
+  DEFAULT_REG_INCREASE,
+  DEFAULT_REG_SERVICE_FEE,
   DEFAULT_ROAD_TAX_BRACKETS,
   ExciseSchedule,
   GROUP_LABELS,
@@ -17,6 +22,8 @@ import {
   VAT_RATE,
   VEHICLE_CATEGORIES,
   VehicleCategory,
+  baseRegistrationDuty,
+  computeRegistration,
   defaultLineItems,
   estimateDuty,
   formatNumber,
@@ -26,7 +33,7 @@ import {
   resolveExciseRate,
 } from "@/lib/calc";
 
-const STORAGE_KEY = "car-import-calc:v8";
+const STORAGE_KEY = "car-import-calc:v9";
 
 const MCB_RATES_URL = "https://www.mcb.mu";
 const MRA_FOB_URL = "http://eservices6.mra.mu/choice.asp";
@@ -47,7 +54,12 @@ interface Persisted {
   otherCostsRs: number;
   items: LineItem[];
   exciseSchedule: ExciseSchedule;
-  registrationBrackets: CcBracket[];
+  regCarIceBrackets: CcBracket[];
+  regElectricKwBrackets: CcBracket[];
+  regIncrease: number;
+  regDocFee: number;
+  regHpFee: number;
+  regServiceFee: number;
   roadTaxBrackets: CcBracket[];
 }
 
@@ -80,9 +92,16 @@ export default function Home() {
   const [otherCostsRs, setOtherCostsRs] = useState(1517);
   const [items, setItems] = useState<LineItem[]>(defaultLineItems());
   const [exciseSchedule, setExciseSchedule] = useState(DEFAULT_EXCISE_SCHEDULE);
-  const [registrationBrackets, setRegistrationBrackets] = useState(
-    DEFAULT_REGISTRATION_BRACKETS,
+  const [regCarIceBrackets, setRegCarIceBrackets] = useState(
+    DEFAULT_REG_CAR_ICE_BRACKETS,
   );
+  const [regElectricKwBrackets, setRegElectricKwBrackets] = useState(
+    DEFAULT_REG_ELECTRIC_KW_BRACKETS,
+  );
+  const [regIncrease, setRegIncrease] = useState(DEFAULT_REG_INCREASE);
+  const [regDocFee, setRegDocFee] = useState(DEFAULT_REG_DOC_FEE);
+  const [regHpFee, setRegHpFee] = useState(DEFAULT_REG_HP_FEE);
+  const [regServiceFee, setRegServiceFee] = useState(DEFAULT_REG_SERVICE_FEE);
   const [roadTaxBrackets, setRoadTaxBrackets] = useState(
     DEFAULT_ROAD_TAX_BRACKETS,
   );
@@ -106,7 +125,13 @@ export default function Home() {
     if (s.otherCostsRs !== undefined) setOtherCostsRs(s.otherCostsRs);
     if (s.items) setItems(s.items);
     if (s.exciseSchedule) setExciseSchedule(s.exciseSchedule);
-    if (s.registrationBrackets) setRegistrationBrackets(s.registrationBrackets);
+    if (s.regCarIceBrackets) setRegCarIceBrackets(s.regCarIceBrackets);
+    if (s.regElectricKwBrackets)
+      setRegElectricKwBrackets(s.regElectricKwBrackets);
+    if (s.regIncrease !== undefined) setRegIncrease(s.regIncrease);
+    if (s.regDocFee !== undefined) setRegDocFee(s.regDocFee);
+    if (s.regHpFee !== undefined) setRegHpFee(s.regHpFee);
+    if (s.regServiceFee !== undefined) setRegServiceFee(s.regServiceFee);
     if (s.roadTaxBrackets) setRoadTaxBrackets(s.roadTaxBrackets);
     setLoaded(true);
   }, []);
@@ -130,7 +155,12 @@ export default function Home() {
       otherCostsRs,
       items,
       exciseSchedule,
-      registrationBrackets,
+      regCarIceBrackets,
+      regElectricKwBrackets,
+      regIncrease,
+      regDocFee,
+      regHpFee,
+      regServiceFee,
       roadTaxBrackets,
     };
     try {
@@ -155,7 +185,12 @@ export default function Home() {
     otherCostsRs,
     items,
     exciseSchedule,
-    registrationBrackets,
+    regCarIceBrackets,
+    regElectricKwBrackets,
+    regIncrease,
+    regDocFee,
+    regHpFee,
+    regServiceFee,
     roadTaxBrackets,
   ]);
 
@@ -194,10 +229,36 @@ export default function Home() {
     () => estimateDuty(builtCif, exciseRate),
     [builtCif, exciseRate],
   );
-  const registrationEstimate = useMemo(
-    () => lookupBracket(registrationBrackets, cc),
-    [registrationBrackets, cc],
-  );
+  // Registration duty: official base (Part A/B/C) + budget increase + fixed fees.
+  const regBreakdown = useMemo(() => {
+    const base = baseRegistrationDuty(
+      category,
+      powertrain.id,
+      cc,
+      powerKw,
+      regCarIceBrackets,
+      regElectricKwBrackets,
+    );
+    return computeRegistration(
+      base,
+      regIncrease,
+      regDocFee,
+      regHpFee,
+      regServiceFee,
+    );
+  }, [
+    category,
+    powertrain.id,
+    cc,
+    powerKw,
+    regCarIceBrackets,
+    regElectricKwBrackets,
+    regIncrease,
+    regDocFee,
+    regHpFee,
+    regServiceFee,
+  ]);
+  const registrationEstimate = regBreakdown.total;
   const roadTaxEstimate = useMemo(
     () => lookupBracket(roadTaxBrackets, cc),
     [roadTaxBrackets, cc],
@@ -281,7 +342,12 @@ export default function Home() {
     setOtherCostsRs(1517);
     setItems(defaultLineItems());
     setExciseSchedule(DEFAULT_EXCISE_SCHEDULE);
-    setRegistrationBrackets(DEFAULT_REGISTRATION_BRACKETS);
+    setRegCarIceBrackets(DEFAULT_REG_CAR_ICE_BRACKETS);
+    setRegElectricKwBrackets(DEFAULT_REG_ELECTRIC_KW_BRACKETS);
+    setRegIncrease(DEFAULT_REG_INCREASE);
+    setRegDocFee(DEFAULT_REG_DOC_FEE);
+    setRegHpFee(DEFAULT_REG_HP_FEE);
+    setRegServiceFee(DEFAULT_REG_SERVICE_FEE);
     setRoadTaxBrackets(DEFAULT_ROAD_TAX_BRACKETS);
   }
 
@@ -561,13 +627,45 @@ export default function Home() {
           </dl>
         </div>
 
+        {/* Registration duty breakdown */}
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+          <dl className="space-y-1 text-sm">
+            <BreakdownRow
+              label={`Registration base (Part ${
+                powertrain.id === "electric"
+                  ? "C, by kW"
+                  : powertrain.id === "ice"
+                    ? "A, by cc"
+                    : "B, 50% of A"
+              })`}
+              value={formatRs(regBreakdown.base)}
+            />
+            <BreakdownRow
+              label={`+ ${(regIncrease * 100).toFixed(0)}% increase → subtotal`}
+              value={formatRs(regBreakdown.increased)}
+            />
+            <BreakdownRow
+              label={`+ Fixed fees (doc ${formatRs(regDocFee)} + HP ${formatRs(
+                regHpFee,
+              )} + service ${formatRs(regServiceFee)})`}
+              value={formatRs(regBreakdown.fees)}
+            />
+            <div className="flex items-center justify-between border-t border-slate-200 pt-1.5 font-semibold text-slate-800">
+              <dt>Registration duty</dt>
+              <dd className="flex items-center gap-2 tabular-nums">
+                {formatRs(registrationEstimate)}
+                <button
+                  onClick={() => applyEstimate("registration")}
+                  className="no-print rounded bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand hover:bg-brand/20"
+                >
+                  Use
+                </button>
+              </dd>
+            </div>
+          </dl>
+        </div>
+
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <EstimateCard
-            title="Registration"
-            value={registrationEstimate}
-            sub="NLTA first registration (by cc)"
-            onUse={() => applyEstimate("registration")}
-          />
           <EstimateCard
             title="Road tax"
             value={roadTaxEstimate}
@@ -577,26 +675,64 @@ export default function Home() {
         </div>
 
         {showRates && (
-          <div className="no-print mt-5 grid grid-cols-1 gap-5 border-t border-slate-100 pt-5 lg:grid-cols-3">
-            <ExciseSpecEditor
-              title={`Excise — ${CATEGORY_LABELS[category]} · ${powertrain.label}${
-                hasSubTypeChoice ? ` · ${subType.label}` : ""
-              }`}
-              spec={spec}
-              onChange={updateCurrentSpec}
-            />
-            <RateTableEditor
-              title="Registration fee (Rs)"
-              unit="Rs"
-              brackets={registrationBrackets}
-              onChange={setRegistrationBrackets}
-            />
-            <RateTableEditor
-              title="Road tax (Rs)"
-              unit="Rs"
-              brackets={roadTaxBrackets}
-              onChange={setRoadTaxBrackets}
-            />
+          <div className="no-print mt-5 space-y-5 border-t border-slate-100 pt-5">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+              <ExciseSpecEditor
+                title={`Excise — ${CATEGORY_LABELS[category]} · ${powertrain.label}${
+                  hasSubTypeChoice ? ` · ${subType.label}` : ""
+                }`}
+                spec={spec}
+                onChange={updateCurrentSpec}
+              />
+              <RateTableEditor
+                title="Road tax (Rs)"
+                unit="Rs"
+                brackets={roadTaxBrackets}
+                onChange={setRoadTaxBrackets}
+              />
+              <div>
+                <h4 className="mb-2 text-xs font-semibold text-slate-500">
+                  Registration parameters
+                </h4>
+                <div className="space-y-1.5 text-xs">
+                  <ParamInput
+                    label="Budget increase (%)"
+                    value={Math.round(regIncrease * 100)}
+                    onChange={(v) => setRegIncrease(v / 100)}
+                  />
+                  <ParamInput
+                    label="Document fee (Rs)"
+                    value={regDocFee}
+                    onChange={setRegDocFee}
+                  />
+                  <ParamInput
+                    label="Horsepower fee (Rs)"
+                    value={regHpFee}
+                    onChange={setRegHpFee}
+                  />
+                  <ParamInput
+                    label="Service fee (Rs)"
+                    value={regServiceFee}
+                    onChange={setRegServiceFee}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+              <RateTableEditor
+                title="Registration — Part A, cars (Rs by cc)"
+                unit="Rs"
+                brackets={regCarIceBrackets}
+                onChange={setRegCarIceBrackets}
+              />
+              <RateTableEditor
+                title="Registration — Part C, electric cars (Rs by kW)"
+                unit="Rs"
+                thresholdUnit="kW"
+                brackets={regElectricKwBrackets}
+                onChange={setRegElectricKwBrackets}
+              />
+            </div>
           </div>
         )}
       </section>
@@ -737,6 +873,28 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+function ParamInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-slate-500">{label}</span>
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-24 rounded border border-slate-200 px-1.5 py-1 text-right tabular-nums focus:border-brand focus:outline-none"
+      />
+    </div>
   );
 }
 
