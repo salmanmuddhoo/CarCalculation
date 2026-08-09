@@ -188,14 +188,105 @@ export function resolveExciseRate(
 // editable because it applies before excise when non-zero.
 export const DEFAULT_ICD_RATE = 0;
 
-// First registration fee by engine capacity in Rs (illustrative defaults — verify with NLTA).
-export const DEFAULT_REGISTRATION_BRACKETS: CcBracket[] = [
-  { maxCc: 1000, value: 13000 },
-  { maxCc: 1250, value: 25000 },
-  { maxCc: 1600, value: 36500 },
-  { maxCc: 2000, value: 55000 },
-  { maxCc: null, value: 100000 },
+// --- Registration duty (NLTA / Registration Duty schedule, GN 75/2009) -------
+//
+// Registration is computed, not a single flat fee:
+//
+//   base    = official first-registration duty (Part A by cc / Part C by kW)
+//   base   ×= 0.5 for hybrids (Part B) — electric already uses the halved Part C
+//   payable = round(base × (1 + increase)) + doc fee + horsepower fee + service fee
+//
+// The "increase" is the 30% uplift from the last budget; the doc/horsepower/
+// service add-ons are fixed per transaction. Worked example (1490cc hybrid):
+//   52,000 × 0.5 = 26,000 ; × 1.30 = 33,800 ; + 300 + 400 + 2,000 = 36,500.
+
+// Part A — passenger motor cars, "First Registration in Mauritius" column, by cc.
+export const DEFAULT_REG_CAR_ICE_BRACKETS: CcBracket[] = [
+  { maxCc: 1000, value: 16300 },
+  { maxCc: 1250, value: 32500 },
+  { maxCc: 1500, value: 52000 },
+  { maxCc: 1600, value: 65000 },
+  { maxCc: 1750, value: 78000 },
+  { maxCc: 2000, value: 117000 },
+  { maxCc: 2500, value: 156000 },
+  { maxCc: null, value: 195000 },
 ];
+
+// Part C — electric motor cars, "First Registration in Mauritius", by power (kW).
+export const DEFAULT_REG_ELECTRIC_KW_BRACKETS: CcBracket[] = [
+  { maxCc: 27.5, value: 8100 },
+  { maxCc: 40, value: 16300 },
+  { maxCc: 52.5, value: 26000 },
+  { maxCc: 57.5, value: 32500 },
+  { maxCc: 65, value: 39000 },
+  { maxCc: 77.5, value: 58500 },
+  { maxCc: 102.5, value: 78000 },
+  { maxCc: null, value: 97500 },
+];
+
+// Flat first-registration duty for non-car categories (Part A rows: pickup
+// double-cab, and "other goods vehicles" for vans/lorries), with the Part C
+// electric equivalents.
+export const DEFAULT_REG_FLAT: Record<
+  Exclude<VehicleCategory, "car">,
+  { ice: number; electric: number }
+> = {
+  pickup: { ice: 52000, electric: 26000 },
+  van: { ice: 32500, electric: 16300 },
+  lorry: { ice: 32500, electric: 16300 },
+};
+
+export const HYBRID_REG_CONCESSION = 0.5; // Part B: hybrids pay 50% of Part A.
+export const DEFAULT_REG_INCREASE = 0.3; // Last budget's 30% increase.
+export const DEFAULT_REG_DOC_FEE = 300; // Registration document.
+export const DEFAULT_REG_HP_FEE = 400; // Horsepower document.
+export const DEFAULT_REG_SERVICE_FEE = 2000; // Person handling the paperwork.
+
+function isHybridPowertrain(id: string): boolean {
+  return id.includes("hybrid");
+}
+
+/** The official base registration duty (after the hybrid 50% concession). */
+export function baseRegistrationDuty(
+  category: VehicleCategory,
+  powertrainId: string,
+  cc: number,
+  powerKw: number,
+  carIceBrackets: CcBracket[],
+  electricKwBrackets: CcBracket[],
+): number {
+  const isElectric = powertrainId === "electric";
+  const isHybrid = isHybridPowertrain(powertrainId);
+  if (category === "car") {
+    if (isElectric) return lookupBracket(electricKwBrackets, powerKw);
+    const ice = lookupBracket(carIceBrackets, cc);
+    return isHybrid ? ice * HYBRID_REG_CONCESSION : ice;
+  }
+  const flat = DEFAULT_REG_FLAT[category];
+  if (isElectric) return flat.electric;
+  return isHybrid ? flat.ice * HYBRID_REG_CONCESSION : flat.ice;
+}
+
+export interface RegistrationBreakdown {
+  base: number;
+  increased: number;
+  fees: number;
+  total: number;
+}
+
+/** Apply the budget increase and fixed fees to a base duty. */
+export function computeRegistration(
+  base: number,
+  increaseRate: number,
+  docFee: number,
+  hpFee: number,
+  serviceFee: number,
+): RegistrationBreakdown {
+  const increased = Math.round(base * (1 + increaseRate));
+  const fees =
+    (Number(docFee) || 0) + (Number(hpFee) || 0) + (Number(serviceFee) || 0);
+  return { base, increased, fees, total: increased + fees };
+}
 
 // Road tax (12-month licence) by engine capacity in Rs. Official NLTA figures
 // for Mauritius from the Motor Vehicle Licences communiqué effective

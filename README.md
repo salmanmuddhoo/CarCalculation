@@ -121,8 +121,26 @@ motorcar / dual-purpose / double-cab, including hybrid & electric):
 | 1851 – 2250 cc  | Rs 12,000            |
 | Above 2250 cc   | Rs 15,000            |
 
-**Registration fee** still ships as an illustrative default — confirm with
-NLTA.
+**Registration duty** is computed from the official Registration Duty schedule
+(GN 75/2009, "First Registration in Mauritius" column):
+
+```
+base    = official duty (Part A by cc, or Part C by kW for electric)
+base   ×= 0.5 for hybrids (Part B — mild / full / plug-in)
+payable = round(base × (1 + increase)) + doc fee + horsepower fee + service fee
+```
+
+- **Part A** (petrol/diesel cars, by cc): 16,300 / 32,500 / **52,000** / 65,000 /
+  78,000 / 117,000 / 156,000 / 195,000 across the ≤1000 → >2500 cc bands.
+- **Part B** (hybrids): 50% of Part A.
+- **Part C** (electric, by kW): 8,100 / 16,300 / 26,000 / 32,500 / 39,000 /
+  58,500 / 78,000 / 97,500 across the ≤27.5 → >102.5 kW bands.
+- **increase**: 30% (last budget) — editable.
+- **fixed fees**: document Rs 300 + horsepower Rs 400 + service Rs 2,000 —
+  editable.
+
+Worked example (1490cc hybrid): 52,000 × 0.5 = 26,000 → × 1.30 = 33,800 →
++ 300 + 400 + 2,000 = **Rs 36,500**. All values are editable in the app.
 
 Always confirm the current figures against MRA and NLTA before relying on a
 number.
