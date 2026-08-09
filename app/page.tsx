@@ -15,6 +15,7 @@ import {
   DEFAULT_REG_INCREASE,
   DEFAULT_REG_SERVICE_FEE,
   DEFAULT_ROAD_TAX_BRACKETS,
+  DEFAULT_ROAD_TAX_KW_BRACKETS,
   ExciseSchedule,
   GROUP_LABELS,
   LineItem,
@@ -36,7 +37,7 @@ import {
   resolveExciseRate,
 } from "@/lib/calc";
 
-const STORAGE_KEY = "car-import-calc:v11";
+const STORAGE_KEY = "car-import-calc:v12";
 
 const MCB_RATES_URL = "https://www.mcb.mu";
 const MRA_FOB_URL = "http://eservices6.mra.mu/choice.asp";
@@ -67,6 +68,7 @@ interface Persisted {
   regHpFee: number;
   regServiceFee: number;
   roadTaxBrackets: CcBracket[];
+  roadTaxKwBrackets: CcBracket[];
 }
 
 function loadState(): Partial<Persisted> {
@@ -114,6 +116,9 @@ export default function Home() {
   const [roadTaxBrackets, setRoadTaxBrackets] = useState(
     DEFAULT_ROAD_TAX_BRACKETS,
   );
+  const [roadTaxKwBrackets, setRoadTaxKwBrackets] = useState(
+    DEFAULT_ROAD_TAX_KW_BRACKETS,
+  );
   const [showRates, setShowRates] = useState(false);
 
   // Hydrate from localStorage once on mount.
@@ -145,6 +150,7 @@ export default function Home() {
     if (s.regHpFee !== undefined) setRegHpFee(s.regHpFee);
     if (s.regServiceFee !== undefined) setRegServiceFee(s.regServiceFee);
     if (s.roadTaxBrackets) setRoadTaxBrackets(s.roadTaxBrackets);
+    if (s.roadTaxKwBrackets) setRoadTaxKwBrackets(s.roadTaxKwBrackets);
     setLoaded(true);
   }, []);
 
@@ -177,6 +183,7 @@ export default function Home() {
       regHpFee,
       regServiceFee,
       roadTaxBrackets,
+      roadTaxKwBrackets,
     };
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -210,6 +217,7 @@ export default function Home() {
     regHpFee,
     regServiceFee,
     roadTaxBrackets,
+    roadTaxKwBrackets,
   ]);
 
   const cifMru = useMemo(() => Math.round(cifJpy * jpyRate), [cifJpy, jpyRate]);
@@ -239,6 +247,7 @@ export default function Home() {
 
   const needsCc = spec.kind === "cc";
   const needsKw = spec.kind === "kw";
+  const isElectric = powertrain.id === "electric";
   const hasSubTypeChoice = subTypes.length > 1;
 
   const exciseRate = resolveExciseRate(spec, cc, powerKw);
@@ -277,9 +286,13 @@ export default function Home() {
     regServiceFee,
   ]);
   const registrationEstimate = regBreakdown.total;
+  // Road tax: electric vehicles are rated by power (kW), everything else by cc.
   const roadTaxEstimate = useMemo(
-    () => lookupBracket(roadTaxBrackets, cc),
-    [roadTaxBrackets, cc],
+    () =>
+      isElectric
+        ? lookupBracket(roadTaxKwBrackets, powerKw)
+        : lookupBracket(roadTaxBrackets, cc),
+    [isElectric, roadTaxKwBrackets, powerKw, roadTaxBrackets, cc],
   );
 
   const itemsTotal = useMemo(
@@ -387,6 +400,7 @@ export default function Home() {
     setRegHpFee(DEFAULT_REG_HP_FEE);
     setRegServiceFee(DEFAULT_REG_SERVICE_FEE);
     setRoadTaxBrackets(DEFAULT_ROAD_TAX_BRACKETS);
+    setRoadTaxKwBrackets(DEFAULT_ROAD_TAX_KW_BRACKETS);
   }
 
   const dimLabel = needsKw
@@ -691,7 +705,7 @@ export default function Home() {
           <EstimateCard
             title="Road tax"
             value={roadTaxEstimate}
-            sub="NLTA 12-month (Mauritius, by cc)"
+            sub={`NLTA 12-month (Mauritius, by ${isElectric ? "kW" : "cc"})`}
           />
         </div>
 
@@ -705,12 +719,21 @@ export default function Home() {
                 spec={spec}
                 onChange={updateCurrentSpec}
               />
-              <RateTableEditor
-                title="Road tax (Rs)"
-                unit="Rs"
-                brackets={roadTaxBrackets}
-                onChange={setRoadTaxBrackets}
-              />
+              <div className="space-y-4">
+                <RateTableEditor
+                  title="Road tax — by cc (Rs)"
+                  unit="Rs"
+                  brackets={roadTaxBrackets}
+                  onChange={setRoadTaxBrackets}
+                />
+                <RateTableEditor
+                  title="Road tax — electric, by kW (Rs)"
+                  unit="Rs"
+                  thresholdUnit="kW"
+                  brackets={roadTaxKwBrackets}
+                  onChange={setRoadTaxKwBrackets}
+                />
+              </div>
               <div>
                 <h4 className="mb-2 text-xs font-semibold text-slate-500">
                   Registration parameters
