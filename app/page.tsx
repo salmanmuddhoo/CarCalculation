@@ -2,40 +2,46 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  CATEGORY_LABELS,
   CcBracket,
   CostGroup,
-  DEFAULT_EXCISE_TABLES,
+  DEFAULT_EXCISE_SCHEDULE,
   DEFAULT_ICD_RATE,
   DEFAULT_REGISTRATION_BRACKETS,
   DEFAULT_ROAD_TAX_BRACKETS,
-  FUEL_LABELS,
-  FUEL_TYPES,
-  FuelType,
-  RATED_BY_KW,
+  ExciseSchedule,
   GROUP_LABELS,
   LineItem,
+  Powertrain,
+  RateSpec,
+  SubType,
   VAT_RATE,
+  VEHICLE_CATEGORIES,
+  VehicleCategory,
   defaultLineItems,
   estimateDuty,
   formatNumber,
   formatRs,
   lookupBracket,
   newLineItem,
+  resolveExciseRate,
 } from "@/lib/calc";
 
-const STORAGE_KEY = "car-import-calc:v4";
+const STORAGE_KEY = "car-import-calc:v5";
 
 interface Persisted {
   carName: string;
   cifJpy: number;
   jpyRate: number;
+  category: VehicleCategory;
+  powertrainId: string;
+  subTypeId: string;
   cc: number;
   powerKw: number;
-  fuelType: FuelType;
   customsValue: number;
   icdRate: number;
   items: LineItem[];
-  exciseTables: Record<FuelType, CcBracket[]>;
+  exciseSchedule: ExciseSchedule;
   registrationBrackets: CcBracket[];
   roadTaxBrackets: CcBracket[];
 }
@@ -50,25 +56,22 @@ function loadState(): Partial<Persisted> {
   }
 }
 
-const GROUP_ORDER: CostGroup[] = [
-  "taxes",
-  "shipping",
-  "preparation",
-  "other",
-];
+const GROUP_ORDER: CostGroup[] = ["taxes", "shipping", "preparation", "other"];
 
 export default function Home() {
   const [loaded, setLoaded] = useState(false);
   const [carName, setCarName] = useState("");
   const [cifJpy, setCifJpy] = useState(1680000);
   const [jpyRate, setJpyRate] = useState(0.29);
+  const [category, setCategory] = useState<VehicleCategory>("car");
+  const [powertrainId, setPowertrainId] = useState("hybrid");
+  const [subTypeId, setSubTypeId] = useState("standard");
   const [cc, setCc] = useState(1490);
   const [powerKw, setPowerKw] = useState(100);
-  const [fuelType, setFuelType] = useState<FuelType>("hybrid");
   const [customsValue, setCustomsValue] = useState(347956);
   const [icdRate, setIcdRate] = useState(DEFAULT_ICD_RATE);
   const [items, setItems] = useState<LineItem[]>(defaultLineItems());
-  const [exciseTables, setExciseTables] = useState(DEFAULT_EXCISE_TABLES);
+  const [exciseSchedule, setExciseSchedule] = useState(DEFAULT_EXCISE_SCHEDULE);
   const [registrationBrackets, setRegistrationBrackets] = useState(
     DEFAULT_REGISTRATION_BRACKETS,
   );
@@ -83,13 +86,15 @@ export default function Home() {
     if (s.carName !== undefined) setCarName(s.carName);
     if (s.cifJpy !== undefined) setCifJpy(s.cifJpy);
     if (s.jpyRate !== undefined) setJpyRate(s.jpyRate);
+    if (s.category !== undefined) setCategory(s.category);
+    if (s.powertrainId !== undefined) setPowertrainId(s.powertrainId);
+    if (s.subTypeId !== undefined) setSubTypeId(s.subTypeId);
     if (s.cc !== undefined) setCc(s.cc);
     if (s.powerKw !== undefined) setPowerKw(s.powerKw);
-    if (s.fuelType !== undefined) setFuelType(s.fuelType);
     if (s.customsValue !== undefined) setCustomsValue(s.customsValue);
     if (s.icdRate !== undefined) setIcdRate(s.icdRate);
     if (s.items) setItems(s.items);
-    if (s.exciseTables) setExciseTables(s.exciseTables);
+    if (s.exciseSchedule) setExciseSchedule(s.exciseSchedule);
     if (s.registrationBrackets) setRegistrationBrackets(s.registrationBrackets);
     if (s.roadTaxBrackets) setRoadTaxBrackets(s.roadTaxBrackets);
     setLoaded(true);
@@ -102,13 +107,15 @@ export default function Home() {
       carName,
       cifJpy,
       jpyRate,
+      category,
+      powertrainId,
+      subTypeId,
       cc,
       powerKw,
-      fuelType,
       customsValue,
       icdRate,
       items,
-      exciseTables,
+      exciseSchedule,
       registrationBrackets,
       roadTaxBrackets,
     };
@@ -122,26 +129,38 @@ export default function Home() {
     carName,
     cifJpy,
     jpyRate,
+    category,
+    powertrainId,
+    subTypeId,
     cc,
     powerKw,
-    fuelType,
     customsValue,
     icdRate,
     items,
-    exciseTables,
+    exciseSchedule,
     registrationBrackets,
     roadTaxBrackets,
   ]);
 
   const cifMru = useMemo(() => Math.round(cifJpy * jpyRate), [cifJpy, jpyRate]);
 
-  const isElectric = fuelType === RATED_BY_KW;
-  const exciseBrackets = exciseTables[fuelType];
-  // Electric cars are rated by power output (kW); every other type by cc.
-  const exciseLookupValue = isElectric ? powerKw : cc;
+  // Resolve the currently selected powertrain / sub-type with safe fallbacks.
+  const powertrains: Powertrain[] = exciseSchedule[category];
+  const powertrain: Powertrain =
+    powertrains.find((p) => p.id === powertrainId) ?? powertrains[0];
+  const subTypes: SubType[] = powertrain.subTypes;
+  const subType: SubType =
+    subTypes.find((s) => s.id === subTypeId) ?? subTypes[0];
+  const spec: RateSpec = subType.spec;
+
+  const needsCc = spec.kind === "cc";
+  const needsKw = spec.kind === "kw";
+  const hasSubTypeChoice = subTypes.length > 1;
+
+  const exciseRate = resolveExciseRate(spec, cc, powerKw);
   const dutyEstimate = useMemo(
-    () => estimateDuty(customsValue, exciseLookupValue, exciseBrackets, icdRate),
-    [customsValue, exciseLookupValue, exciseBrackets, icdRate],
+    () => estimateDuty(customsValue, exciseRate, icdRate),
+    [customsValue, exciseRate, icdRate],
   );
   const registrationEstimate = useMemo(
     () => lookupBracket(registrationBrackets, cc),
@@ -158,10 +177,39 @@ export default function Home() {
   );
   const grandTotal = cifMru + itemsTotal;
 
+  // --- selection handlers keep powertrain/sub-type valid ---------------------
+  function changeCategory(next: VehicleCategory) {
+    setCategory(next);
+    const pt = exciseSchedule[next][0];
+    setPowertrainId(pt.id);
+    setSubTypeId(pt.subTypes[0].id);
+  }
+  function changePowertrain(id: string) {
+    setPowertrainId(id);
+    const pt = powertrains.find((p) => p.id === id) ?? powertrains[0];
+    setSubTypeId(pt.subTypes[0].id);
+  }
+
+  // --- editing the excise schedule -------------------------------------------
+  function updateCurrentSpec(nextSpec: RateSpec) {
+    setExciseSchedule((prev) => {
+      const next: ExciseSchedule = { ...prev };
+      next[category] = prev[category].map((p) =>
+        p.id !== powertrain.id
+          ? p
+          : {
+              ...p,
+              subTypes: p.subTypes.map((s) =>
+                s.id !== subType.id ? s : { ...s, spec: nextSpec },
+              ),
+            },
+      );
+      return next;
+    });
+  }
+
   function updateItem(id: string, patch: Partial<LineItem>) {
-    setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, ...patch } : i)),
-    );
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
   }
   function removeItem(id: string) {
     setItems((prev) => prev.filter((i) => i.id !== id));
@@ -189,20 +237,22 @@ export default function Home() {
     setCarName("");
     setCifJpy(1680000);
     setJpyRate(0.29);
+    setCategory("car");
+    setPowertrainId("hybrid");
+    setSubTypeId("standard");
     setCc(1490);
     setPowerKw(100);
-    setFuelType("hybrid");
     setCustomsValue(347956);
     setIcdRate(DEFAULT_ICD_RATE);
     setItems(defaultLineItems());
-    setExciseTables(DEFAULT_EXCISE_TABLES);
+    setExciseSchedule(DEFAULT_EXCISE_SCHEDULE);
     setRegistrationBrackets(DEFAULT_REGISTRATION_BRACKETS);
     setRoadTaxBrackets(DEFAULT_ROAD_TAX_BRACKETS);
   }
 
-  function setExciseBracketsForFuel(b: CcBracket[]) {
-    setExciseTables((prev) => ({ ...prev, [fuelType]: b }));
-  }
+  const dimLabel = needsKw
+    ? `${formatNumber(powerKw)}kW`
+    : `${formatNumber(cc)}cc`;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -211,7 +261,7 @@ export default function Home() {
           🚗 Car Import Calculator
         </h1>
         <p className="mt-1 text-sm text-slate-600">
-          Estimate the total landed cost of importing a car from{" "}
+          Estimate the total landed cost of importing a vehicle from{" "}
           <span className="font-medium">Japan</span> to{" "}
           <span className="font-medium">Mauritius</span>.
         </p>
@@ -223,38 +273,68 @@ export default function Home() {
           Vehicle & currency
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Car name / reference">
+          <Field label="Vehicle name / reference">
             <input
               type="text"
               value={carName}
               onChange={(e) => setCarName(e.target.value)}
-              placeholder="e.g. Nissan Note 2018"
+              placeholder="e.g. Toyota Yaris Hybrid 2022"
               className="input"
             />
           </Field>
-          <Field label="Engine capacity (cc)">
-            <input
-              type="number"
-              value={cc || ""}
-              onChange={(e) => setCc(Number(e.target.value))}
-              className="input"
-            />
-          </Field>
-          <Field label="Fuel / powertrain type">
+          <Field label="Vehicle category">
             <select
-              value={fuelType}
-              onChange={(e) => setFuelType(e.target.value as FuelType)}
+              value={category}
+              onChange={(e) => changeCategory(e.target.value as VehicleCategory)}
               className="input"
             >
-              {FUEL_TYPES.map((f) => (
-                <option key={f} value={f}>
-                  {FUEL_LABELS[f]}
+              {VEHICLE_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {CATEGORY_LABELS[c]}
                 </option>
               ))}
             </select>
           </Field>
-          {isElectric && (
-            <Field label="Power rating (kW) — for electric excise">
+          <Field label="Fuel / powertrain type">
+            <select
+              value={powertrain.id}
+              onChange={(e) => changePowertrain(e.target.value)}
+              className="input"
+            >
+              {powertrains.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {hasSubTypeChoice && (
+            <Field label="Body / cabin type">
+              <select
+                value={subType.id}
+                onChange={(e) => setSubTypeId(e.target.value)}
+                className="input"
+              >
+                {subTypes.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+          {needsCc && (
+            <Field label="Engine capacity (cc)">
+              <input
+                type="number"
+                value={cc || ""}
+                onChange={(e) => setCc(Number(e.target.value))}
+                className="input"
+              />
+            </Field>
+          )}
+          {needsKw && (
+            <Field label="Power rating (kW)">
               <input
                 type="number"
                 value={powerKw || ""}
@@ -263,7 +343,7 @@ export default function Home() {
               />
             </Field>
           )}
-          <Field label="Car cost in Japan — CIF (JPY)">
+          <Field label="Vehicle cost in Japan — CIF (JPY)">
             <input
               type="number"
               value={cifJpy || ""}
@@ -292,11 +372,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CC-based estimates helper */}
+      {/* Excise / duty estimate */}
       <section className="mb-6 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-            CC-based estimates ({formatNumber(cc)} cc)
+            Duty & tax estimate
           </h2>
           <button
             onClick={() => setShowRates((v) => !v)}
@@ -306,9 +386,9 @@ export default function Home() {
           </button>
         </div>
         <p className="mt-1 text-xs text-slate-500">
-          Quick estimates from editable rate tables. Use the actual MRA / NLTA
-          figures when you have them — click “Use” to copy an estimate into the
-          cost line below.
+          Excise/VAT from the official MRA schedule; registration & road tax from
+          NLTA. Use the actual MRA / NLTA figures when you have them — click
+          “Use” to copy an estimate into the cost line below.
         </p>
 
         {/* Duty computation (MRA method) */}
@@ -343,13 +423,11 @@ export default function Home() {
           </div>
           <p className="mt-2 text-[11px] text-slate-400">
             MRA assesses its own customs value (often lower than the price paid).
-            Excise rate for a{" "}
-            {isElectric
-              ? `${formatNumber(powerKw)}kW`
-              : `${formatNumber(cc)}cc`}{" "}
-            {FUEL_LABELS[fuelType]} car:{" "}
+            Excise rate for a {dimLabel} {CATEGORY_LABELS[category].toLowerCase()}{" "}
+            ({powertrain.label}
+            {hasSubTypeChoice ? `, ${subType.label}` : ""}):{" "}
             <span className="font-semibold text-slate-500">
-              {(dutyEstimate.exciseRate * 100).toFixed(0)}%
+              {(exciseRate * 100).toFixed(0)}%
             </span>
             .
           </p>
@@ -362,9 +440,7 @@ export default function Home() {
               />
             )}
             <BreakdownRow
-              label={`Excise duty (${(dutyEstimate.exciseRate * 100).toFixed(
-                0,
-              )}%)`}
+              label={`Excise duty (${(exciseRate * 100).toFixed(0)}%)`}
               value={formatRs(dutyEstimate.exciseAmount)}
             />
             <BreakdownRow
@@ -390,26 +466,25 @@ export default function Home() {
           <EstimateCard
             title="Registration"
             value={registrationEstimate}
-            sub="NLTA first registration"
+            sub="NLTA first registration (by cc)"
             onUse={() => applyEstimate("registration")}
           />
           <EstimateCard
             title="Road tax"
             value={roadTaxEstimate}
-            sub="NLTA 12-month (Mauritius)"
+            sub="NLTA 12-month (Mauritius, by cc)"
             onUse={() => applyEstimate("roadtax")}
           />
         </div>
 
         {showRates && (
           <div className="no-print mt-5 grid grid-cols-1 gap-5 border-t border-slate-100 pt-5 lg:grid-cols-3">
-            <RateTableEditor
-              title={`Excise duty rate — ${FUEL_LABELS[fuelType]}`}
-              unit="%"
-              thresholdUnit={isElectric ? "kW" : "cc"}
-              isPercent
-              brackets={exciseBrackets}
-              onChange={setExciseBracketsForFuel}
+            <ExciseSpecEditor
+              title={`Excise — ${CATEGORY_LABELS[category]} · ${powertrain.label}${
+                hasSubTypeChoice ? ` · ${subType.label}` : ""
+              }`}
+              spec={spec}
+              onChange={updateCurrentSpec}
             />
             <RateTableEditor
               title="Registration fee (Rs)"
@@ -462,7 +537,7 @@ export default function Home() {
                         onChange={(e) =>
                           updateItem(item.id, { label: e.target.value })
                         }
-                        className="min-w-0 flex-1 bg-transparent px-1 py-1 text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand/40 rounded"
+                        className="min-w-0 flex-1 rounded bg-transparent px-1 py-1 text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand/40"
                       />
                       <div className="flex items-center gap-1">
                         <span className="text-xs text-slate-400">Rs</span>
@@ -537,10 +612,12 @@ export default function Home() {
 
       <footer className="mb-6 text-xs text-slate-400">
         <p>
-          VAT rate used for estimates: {(VAT_RATE * 100).toFixed(0)}%. Rate
-          tables are editable and saved in your browser only. Verify excise/VAT
-          with MRA and registration/road tax with NLTA before relying on a
-          figure.
+          VAT rate used for estimates: {(VAT_RATE * 100).toFixed(0)}%. Excise
+          rates follow the official MRA schedule for motor cars, pick-ups, vans
+          and lorries; road tax uses the NLTA figures (eff. 01 July 2025). Rate
+          tables are editable and saved in your browser only. The estimate
+          ignores CO₂ rebate/levy and duty-exemption concessions — verify with
+          MRA / NLTA before relying on a figure.
         </p>
       </footer>
     </main>
@@ -600,6 +677,48 @@ function EstimateCard({
       </div>
       <div className="text-[11px] text-slate-400">{sub}</div>
     </div>
+  );
+}
+
+/** Editor for the currently selected excise sub-type: a fixed % or a bracket table. */
+function ExciseSpecEditor({
+  title,
+  spec,
+  onChange,
+}: {
+  title: string;
+  spec: RateSpec;
+  onChange: (s: RateSpec) => void;
+}) {
+  if (spec.kind === "fixed") {
+    return (
+      <div>
+        <h4 className="mb-2 text-xs font-semibold text-slate-500">{title}</h4>
+        <div className="flex items-center gap-1.5 text-xs">
+          <span className="text-slate-400">Rate</span>
+          <input
+            type="number"
+            step="1"
+            value={Math.round(spec.rate * 100)}
+            onChange={(e) =>
+              onChange({ kind: "fixed", rate: Number(e.target.value) / 100 })
+            }
+            className="w-20 rounded border border-slate-200 px-1.5 py-1 text-right tabular-nums focus:border-brand focus:outline-none"
+          />
+          <span className="text-slate-400">%</span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <RateTableEditor
+      title={title}
+      unit="%"
+      thresholdUnit={spec.kind === "kw" ? "kW" : "cc"}
+      isPercent
+      brackets={spec.brackets}
+      onChange={(b) => onChange({ kind: spec.kind, brackets: b })}
+    />
   );
 }
 

@@ -42,80 +42,147 @@ export const GROUP_LABELS: Record<CostGroup, string> = {
   other: "Other charges",
 };
 
-// --- Fuel / powertrain type --------------------------------------------------
+// --- Vehicle categories, powertrains and excise rates ------------------------
+//
+// Source: MRA "Rate of excise duty and taxes on motor vehicles". Excise is
+// resolved per vehicle category -> powertrain -> body/cabin sub-type. Depending
+// on the sub-type the rate is a fixed percentage, a table keyed by engine
+// capacity (cc), or a table keyed by electric power output (kW). VAT is 15% in
+// every band (buses can be VAT-exempt, but buses are not modelled here).
+// Cross-checked against a real declaration: car / hybrid / 1,001–1,600cc = 35%
+// (Toyota Yaris Hybrid, 1490cc).
 
-export type FuelType =
-  | "ice"
-  | "mild_hybrid"
-  | "hybrid"
-  | "plugin_hybrid"
-  | "electric";
+export type VehicleCategory = "car" | "pickup" | "van" | "lorry";
 
-export const FUEL_TYPES: FuelType[] = [
-  "ice",
-  "mild_hybrid",
-  "hybrid",
-  "plugin_hybrid",
-  "electric",
+export const VEHICLE_CATEGORIES: VehicleCategory[] = [
+  "car",
+  "pickup",
+  "van",
+  "lorry",
 ];
 
-export const FUEL_LABELS: Record<FuelType, string> = {
-  ice: "Petrol / Diesel (ICE)",
-  mild_hybrid: "Mild hybrid",
-  hybrid: "Hybrid",
-  plugin_hybrid: "Plug-in hybrid",
-  electric: "Electric",
+export const CATEGORY_LABELS: Record<VehicleCategory, string> = {
+  car: "Motor car",
+  pickup: "Pick-up",
+  van: "Van",
+  lorry: "Lorry",
 };
 
-/** Electric excise is rated by power output (kW), so its brackets are keyed by
- *  kW rather than engine capacity. Every other type is keyed by cc. */
-export const RATED_BY_KW: FuelType = "electric";
+/** How a sub-type's excise rate is determined. */
+export type RateSpec =
+  | { kind: "fixed"; rate: number }
+  | { kind: "cc"; brackets: CcBracket[] }
+  | { kind: "kw"; brackets: CcBracket[] };
 
-// --- Default excise tables (official MRA rates for motor cars) ----------------
-//
-// Source: MRA "Rate of excise duty and taxes on motor vehicles" — Motor Cars
-// (transport of not more than 10 persons incl. the driver). For each type the
-// `maxCc` threshold is engine capacity in cc, except Electric where it is the
-// power rating in kW. Cross-checked against a real declaration: Hybrid
-// 1,001–1,600cc = 35% (Toyota Yaris Hybrid, 1490cc). VAT is 15% in every band.
-export const DEFAULT_EXCISE_TABLES: Record<FuelType, CcBracket[]> = {
-  ice: [
-    { maxCc: 550, value: 0 },
-    { maxCc: 1000, value: 0.45 },
-    { maxCc: 1600, value: 0.55 },
-    { maxCc: 2000, value: 0.75 },
-    { maxCc: null, value: 1.0 },
+/** A body / cabin variant within a powertrain (e.g. "Single cabin"). */
+export interface SubType {
+  id: string;
+  label: string;
+  spec: RateSpec;
+}
+
+/** A powertrain option within a category (e.g. "Hybrid"), with its variants. */
+export interface Powertrain {
+  id: string;
+  label: string;
+  subTypes: SubType[];
+}
+
+/** The full editable excise schedule: category -> list of powertrains. */
+export type ExciseSchedule = Record<VehicleCategory, Powertrain[]>;
+
+const carBrackets = (r: number[]): CcBracket[] => [
+  { maxCc: 550, value: r[0] },
+  { maxCc: 1000, value: r[1] },
+  { maxCc: 1600, value: r[2] },
+  { maxCc: 2000, value: r[3] },
+  { maxCc: null, value: r[4] },
+];
+
+const std = (spec: RateSpec): SubType[] => [
+  { id: "standard", label: "Standard", spec },
+];
+
+const electricKw: CcBracket[] = [
+  { maxCc: 180, value: 0.15 },
+  { maxCc: null, value: 0.25 },
+];
+
+export const DEFAULT_EXCISE_SCHEDULE: ExciseSchedule = {
+  car: [
+    { id: "ice", label: "Petrol / Diesel (ICE)", subTypes: std({ kind: "cc", brackets: carBrackets([0, 0.45, 0.55, 0.75, 1.0]) }) },
+    { id: "mild_hybrid", label: "Mild hybrid", subTypes: std({ kind: "cc", brackets: carBrackets([0, 0.25, 0.35, 0.55, 0.75]) }) },
+    { id: "hybrid", label: "Hybrid", subTypes: std({ kind: "cc", brackets: carBrackets([0, 0.25, 0.35, 0.55, 0.75]) }) },
+    { id: "plugin_hybrid", label: "Plug-in hybrid", subTypes: std({ kind: "cc", brackets: carBrackets([0, 0.15, 0.25, 0.35, 0.55]) }) },
+    { id: "electric", label: "Electric", subTypes: std({ kind: "kw", brackets: electricKw }) },
   ],
-  mild_hybrid: [
-    { maxCc: 550, value: 0 },
-    { maxCc: 1000, value: 0.25 },
-    { maxCc: 1600, value: 0.35 },
-    { maxCc: 2000, value: 0.55 },
-    { maxCc: null, value: 0.75 },
+  pickup: [
+    { id: "ice", label: "Petrol / Diesel (ICE)", subTypes: [
+      { id: "single", label: "Single cabin", spec: { kind: "fixed", rate: 0.1 } },
+      { id: "double", label: "Double cabin", spec: { kind: "fixed", rate: 0.3 } },
+    ] },
+    { id: "hybrid", label: "Hybrid", subTypes: [
+      { id: "single", label: "Single cabin", spec: { kind: "fixed", rate: 0.05 } },
+      { id: "double", label: "Double cabin", spec: { kind: "fixed", rate: 0.2 } },
+    ] },
+    { id: "plugin_hybrid", label: "Plug-in hybrid", subTypes: [
+      { id: "single", label: "Single cabin", spec: { kind: "fixed", rate: 0.05 } },
+      { id: "double", label: "Double cabin", spec: { kind: "fixed", rate: 0.15 } },
+    ] },
+    { id: "electric", label: "Electric", subTypes: [
+      { id: "single", label: "Single cabin", spec: { kind: "fixed", rate: 0.05 } },
+      { id: "double", label: "Double cabin", spec: { kind: "kw", brackets: [ { maxCc: 180, value: 0.1 }, { maxCc: null, value: 0.15 } ] } },
+    ] },
   ],
-  hybrid: [
-    { maxCc: 550, value: 0 },
-    { maxCc: 1000, value: 0.25 },
-    { maxCc: 1600, value: 0.35 },
-    { maxCc: 2000, value: 0.55 },
-    { maxCc: null, value: 0.75 },
+  van: [
+    { id: "ice", label: "Petrol / Diesel (ICE)", subTypes: [
+      { id: "refrigerated", label: "Refrigerated", spec: { kind: "fixed", rate: 0 } },
+      { id: "no_bench", label: "No bench / anchor points behind front seats", spec: { kind: "fixed", rate: 0.1 } },
+      { id: "standard", label: "Standard (by cc)", spec: { kind: "cc", brackets: [ { maxCc: 1600, value: 0.55 }, { maxCc: 2000, value: 0.75 }, { maxCc: null, value: 1.0 } ] } },
+    ] },
+    { id: "hybrid", label: "Hybrid", subTypes: [
+      { id: "refrigerated", label: "Refrigerated", spec: { kind: "fixed", rate: 0 } },
+      { id: "no_bench", label: "No bench / anchor points behind front seats", spec: { kind: "fixed", rate: 0.05 } },
+      { id: "standard", label: "Standard (by cc)", spec: { kind: "cc", brackets: [ { maxCc: 1600, value: 0.35 }, { maxCc: 2000, value: 0.55 }, { maxCc: null, value: 0.75 } ] } },
+    ] },
+    { id: "electric", label: "Electric", subTypes: [
+      { id: "refrigerated", label: "Refrigerated", spec: { kind: "fixed", rate: 0 } },
+      { id: "no_bench", label: "No bench / anchor points behind front seats", spec: { kind: "fixed", rate: 0.05 } },
+      { id: "standard", label: "Standard (by kW)", spec: { kind: "kw", brackets: electricKw } },
+    ] },
   ],
-  plugin_hybrid: [
-    { maxCc: 550, value: 0 },
-    { maxCc: 1000, value: 0.15 },
-    { maxCc: 1600, value: 0.25 },
-    { maxCc: 2000, value: 0.35 },
-    { maxCc: null, value: 0.55 },
-  ],
-  // Keyed by power output in kW, not cc.
-  electric: [
-    { maxCc: 180, value: 0.15 },
-    { maxCc: null, value: 0.25 },
+  lorry: [
+    { id: "ice", label: "Petrol / Diesel (ICE)", subTypes: [
+      { id: "ckd", label: "Completely knocked-down (CKD)", spec: { kind: "fixed", rate: 0 } },
+      { id: "refrigerated", label: "Refrigerated", spec: { kind: "fixed", rate: 0 } },
+      { id: "lorry", label: "Lorry", spec: { kind: "fixed", rate: 0.1 } },
+    ] },
+    { id: "hybrid", label: "Hybrid", subTypes: [
+      { id: "refrigerated", label: "Refrigerated", spec: { kind: "fixed", rate: 0 } },
+      { id: "lorry", label: "Lorry", spec: { kind: "fixed", rate: 0.05 } },
+    ] },
+    { id: "electric", label: "Electric", subTypes: [
+      { id: "refrigerated", label: "Refrigerated", spec: { kind: "fixed", rate: 0 } },
+      { id: "lorry", label: "Lorry", spec: { kind: "fixed", rate: 0.05 } },
+    ] },
   ],
 };
 
-// Backwards-compatible default (conventional ICE bands).
-export const DEFAULT_EXCISE_BRACKETS: CcBracket[] = DEFAULT_EXCISE_TABLES.ice;
+/** Resolve the excise rate for a sub-type given the vehicle's cc and power. */
+export function resolveExciseRate(
+  spec: RateSpec,
+  cc: number,
+  powerKw: number,
+): number {
+  switch (spec.kind) {
+    case "fixed":
+      return spec.rate;
+    case "cc":
+      return lookupBracket(spec.brackets, cc);
+    case "kw":
+      return lookupBracket(spec.brackets, powerKw);
+  }
+}
 
 // Import Customs Duty (ICD) rate on cars. 0% in the observed declaration; kept
 // editable because it applies before excise when non-zero.
@@ -167,24 +234,23 @@ export interface DutyEstimate {
 
 /**
  * Estimate ICD, excise duty and VAT from the customs-assessed value (in Rs) and
- * engine capacity, following the MRA method seen on the customs declaration:
+ * the applicable excise rate, following the MRA method seen on the customs
+ * declaration:
  *
- *   ICD    = icdRate  x customsValue
+ *   ICD    = icdRate    x customsValue
  *   Excise = exciseRate x (customsValue + ICD)
- *   VAT    = 15%      x (customsValue + ICD + Excise)
+ *   VAT    = 15%        x (customsValue + ICD + Excise)
  *
  * The customs value is what MRA assesses the vehicle at — usually lower than the
- * price paid. It ignores CO2 rebate/levy; use the exact MRA figure when you
- * have the declaration.
+ * price paid. It ignores CO2 rebate/levy and duty-exemption concessions; use the
+ * exact MRA figure when you have the declaration.
  */
 export function estimateDuty(
   customsValue: number,
-  cc: number,
-  exciseBrackets: CcBracket[],
+  exciseRate: number,
   icdRate: number = DEFAULT_ICD_RATE,
 ): DutyEstimate {
   const icdAmount = Math.round(customsValue * icdRate);
-  const exciseRate = lookupBracket(exciseBrackets, cc);
   const exciseAmount = Math.round((customsValue + icdAmount) * exciseRate);
   const vatAmount = Math.round(
     (customsValue + icdAmount + exciseAmount) * VAT_RATE,

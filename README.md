@@ -41,8 +41,13 @@ Two things matter here:
   on that assessed value. Enter it separately, or click **“= CIF”** to start
   from the converted price.
 
-Official MRA excise rates for motor cars (VAT is 15% in every band), built in as
-editable defaults:
+The app covers **motor cars, pick-ups, vans and lorries**. Pick the vehicle
+category, powertrain, and (where relevant) body/cabin type — the matching
+official excise rate is applied. VAT is 15% in every band. All rates are built
+in as editable defaults; the estimate does not model the CO₂ rebate/levy or
+duty-exemption concessions.
+
+**Motor cars** — by engine capacity (electric by power output in kW):
 
 | Engine capacity | ICE (petrol/diesel) | Mild / full hybrid | Plug-in hybrid |
 | --------------- | ------------------- | ------------------ | -------------- |
@@ -52,12 +57,30 @@ editable defaults:
 | 1,601 – 2,000 cc| 75%                 | 55%                | 35%            |
 | Above 2,000 cc  | 100%                | 75%                | 55%            |
 
-| Electric (by power) | Excise |
-| ------------------- | ------ |
-| ≤ 180 kW            | 15%    |
-| Above 180 kW        | 25%    |
+Electric cars: ≤ 180 kW → 15%, above 180 kW → 25%.
 
-The estimate does not model the CO₂ rebate/levy or duty-exemption concessions.
+**Pick-ups** — by cabin:
+
+| Cabin  | ICE | Hybrid | Plug-in hybrid | Electric            |
+| ------ | --- | ------ | -------------- | ------------------- |
+| Single | 10% | 5%     | 5%             | 5%                  |
+| Double | 30% | 20%    | 15%            | 10% ≤180kW / 15% >  |
+
+**Vans** — by body type:
+
+| Body                         | ICE           | Hybrid        | Electric              |
+| ---------------------------- | ------------- | ------------- | --------------------- |
+| Refrigerated                 | 0%            | 0%            | 0%                    |
+| No bench / anchor points     | 10%           | 5%            | 5%                    |
+| Standard                     | 55/75/100% by cc | 35/55/75% by cc | 15% ≤180kW / 25% > |
+
+**Lorries** — flat by type:
+
+| Type              | ICE | Hybrid | Electric |
+| ----------------- | --- | ------ | -------- |
+| CKD               | 0%  | —      | —        |
+| Refrigerated      | 0%  | 0%     | 0%       |
+| Lorry             | 10% | 5%     | 5%       |
 
 ### Registration fee & road tax (NLTA)
 
