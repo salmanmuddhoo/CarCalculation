@@ -27,7 +27,7 @@ import {
   resolveExciseRate,
 } from "@/lib/calc";
 
-const STORAGE_KEY = "car-import-calc:v6";
+const STORAGE_KEY = "car-import-calc:v7";
 
 const MCB_RATES_URL = "https://www.mcb.mu";
 const MRA_FOB_URL = "http://eservices6.mra.mu/choice.asp";
@@ -42,6 +42,10 @@ interface Persisted {
   cc: number;
   powerKw: number;
   assessedFobJpy: number;
+  customsFxRate: number;
+  freightRs: number;
+  insuranceRs: number;
+  otherCostsRs: number;
   customsValue: number;
   icdRate: number;
   items: LineItem[];
@@ -72,7 +76,11 @@ export default function Home() {
   const [subTypeId, setSubTypeId] = useState("standard");
   const [cc, setCc] = useState(1490);
   const [powerKw, setPowerKw] = useState(100);
-  const [assessedFobJpy, setAssessedFobJpy] = useState(0);
+  const [assessedFobJpy, setAssessedFobJpy] = useState(953484);
+  const [customsFxRate, setCustomsFxRate] = useState(0.315);
+  const [freightRs, setFreightRs] = useState(40950);
+  const [insuranceRs, setInsuranceRs] = useState(5142);
+  const [otherCostsRs, setOtherCostsRs] = useState(1517);
   const [customsValue, setCustomsValue] = useState(347956);
   const [icdRate, setIcdRate] = useState(DEFAULT_ICD_RATE);
   const [items, setItems] = useState<LineItem[]>(defaultLineItems());
@@ -97,6 +105,10 @@ export default function Home() {
     if (s.cc !== undefined) setCc(s.cc);
     if (s.powerKw !== undefined) setPowerKw(s.powerKw);
     if (s.assessedFobJpy !== undefined) setAssessedFobJpy(s.assessedFobJpy);
+    if (s.customsFxRate !== undefined) setCustomsFxRate(s.customsFxRate);
+    if (s.freightRs !== undefined) setFreightRs(s.freightRs);
+    if (s.insuranceRs !== undefined) setInsuranceRs(s.insuranceRs);
+    if (s.otherCostsRs !== undefined) setOtherCostsRs(s.otherCostsRs);
     if (s.customsValue !== undefined) setCustomsValue(s.customsValue);
     if (s.icdRate !== undefined) setIcdRate(s.icdRate);
     if (s.items) setItems(s.items);
@@ -119,6 +131,10 @@ export default function Home() {
       cc,
       powerKw,
       assessedFobJpy,
+      customsFxRate,
+      freightRs,
+      insuranceRs,
+      otherCostsRs,
       customsValue,
       icdRate,
       items,
@@ -142,6 +158,10 @@ export default function Home() {
     cc,
     powerKw,
     assessedFobJpy,
+    customsFxRate,
+    freightRs,
+    insuranceRs,
+    otherCostsRs,
     customsValue,
     icdRate,
     items,
@@ -151,9 +171,19 @@ export default function Home() {
   ]);
 
   const cifMru = useMemo(() => Math.round(cifJpy * jpyRate), [cifJpy, jpyRate]);
+  // Customs value (CIF) builder: assessed FOB converted at customs' own FX rate,
+  // plus freight, insurance and other costs — reproducing the declaration.
   const assessedFobMru = useMemo(
-    () => Math.round(assessedFobJpy * jpyRate),
-    [assessedFobJpy, jpyRate],
+    () => Math.round(assessedFobJpy * customsFxRate),
+    [assessedFobJpy, customsFxRate],
+  );
+  const builtCif = useMemo(
+    () =>
+      assessedFobMru +
+      (Number(freightRs) || 0) +
+      (Number(insuranceRs) || 0) +
+      (Number(otherCostsRs) || 0),
+    [assessedFobMru, freightRs, insuranceRs, otherCostsRs],
   );
 
   // Resolve the currently selected powertrain / sub-type with safe fallbacks.
@@ -254,7 +284,11 @@ export default function Home() {
     setSubTypeId("standard");
     setCc(1490);
     setPowerKw(100);
-    setAssessedFobJpy(0);
+    setAssessedFobJpy(953484);
+    setCustomsFxRate(0.315);
+    setFreightRs(40950);
+    setInsuranceRs(5142);
+    setOtherCostsRs(1517);
     setCustomsValue(347956);
     setIcdRate(DEFAULT_ICD_RATE);
     setItems(defaultLineItems());
@@ -425,10 +459,10 @@ export default function Home() {
                 />
                 <button
                   onClick={() => setCustomsValue(cifMru)}
-                  title="Set equal to the converted CIF"
+                  title="Set equal to the price you paid (CIF at the MCB rate)"
                   className="no-print shrink-0 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 hover:bg-slate-50"
                 >
-                  = CIF
+                  = paid
                 </button>
               </div>
             </Field>
@@ -443,13 +477,23 @@ export default function Home() {
             </Field>
           </div>
 
-          {/* Assessed FOB (JPY) from MRA e-Services -> customs value */}
+          {/* Customs value (CIF) builder — reproduces the MRA declaration */}
           <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white/60 p-3">
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="min-w-[10rem] flex-1">
-                <span className="mb-1 block text-xs font-medium text-slate-500">
-                  Assessed FOB value (JPY) — from MRA e-Services
-                </span>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-slate-600">
+                Build the customs value (CIF)
+              </p>
+              <a
+                href={MRA_FOB_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="no-print text-[11px] font-medium text-brand hover:underline"
+              >
+                MRA e-Services ↗
+              </a>
+            </div>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Field label="Assessed FOB value (JPY)">
                 <input
                   type="number"
                   value={assessedFobJpy || ""}
@@ -457,33 +501,76 @@ export default function Home() {
                   placeholder="e.g. 953484"
                   className="input"
                 />
-              </div>
-              <div className="pb-1 text-xs text-slate-500">
-                × {jpyRate} ={" "}
-                <span className="font-semibold text-slate-700 tabular-nums">
-                  {formatRs(assessedFobMru)}
-                </span>
-              </div>
-              <button
-                onClick={() => setCustomsValue(assessedFobMru)}
-                disabled={!assessedFobJpy}
-                className="no-print rounded-lg bg-brand px-3 py-2 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-40"
-              >
-                Use as customs value
-              </button>
+              </Field>
+              <Field label="Customs exchange rate (1 JPY → MUR)">
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={customsFxRate || ""}
+                  onChange={(e) => setCustomsFxRate(Number(e.target.value))}
+                  className="input"
+                />
+              </Field>
+              <Field label="Freight (Rs)">
+                <input
+                  type="number"
+                  value={freightRs || ""}
+                  onChange={(e) => setFreightRs(Number(e.target.value))}
+                  className="input"
+                />
+              </Field>
+              <Field label="Insurance (Rs)">
+                <input
+                  type="number"
+                  value={insuranceRs || ""}
+                  onChange={(e) => setInsuranceRs(Number(e.target.value))}
+                  className="input"
+                />
+              </Field>
+              <Field label="Other costs (Rs)">
+                <input
+                  type="number"
+                  value={otherCostsRs || ""}
+                  onChange={(e) => setOtherCostsRs(Number(e.target.value))}
+                  className="input"
+                />
+              </Field>
             </div>
+            <dl className="mt-2 space-y-1 border-t border-slate-200 pt-2 text-xs">
+              <BreakdownRow
+                label={`FOB in rupees (${formatNumber(assessedFobJpy)} × ${customsFxRate})`}
+                value={formatRs(assessedFobMru)}
+              />
+              <BreakdownRow label="+ Freight" value={formatRs(freightRs)} />
+              <BreakdownRow label="+ Insurance" value={formatRs(insuranceRs)} />
+              <BreakdownRow label="+ Other costs" value={formatRs(otherCostsRs)} />
+              <div className="flex items-center justify-between border-t border-slate-200 pt-1.5 text-sm font-semibold text-slate-800">
+                <dt>Computed customs value (CIF)</dt>
+                <dd className="flex items-center gap-2 tabular-nums">
+                  {formatRs(builtCif)}
+                  <button
+                    onClick={() => setCustomsValue(builtCif)}
+                    className="no-print rounded bg-brand px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-brand-dark"
+                  >
+                    Use
+                  </button>
+                </dd>
+              </div>
+            </dl>
             <p className="mt-2 text-[11px] text-slate-400">
-              Look up the assessed FOB value in JPY on{" "}
+              Look up the assessed FOB (JPY) on{" "}
               <a
                 href={MRA_FOB_URL}
                 target="_blank"
                 rel="noreferrer"
                 className="font-medium text-brand hover:underline"
               >
-                MRA e-Services ↗
+                MRA e-Services
               </a>
-              , then convert it here. Customs may add freight, insurance and other
-              costs on top — adjust the Rs value above if needed.
+              . Customs converts it at its own rate (≈ 0.315 on the sample
+              declaration — distinct from the MCB rate) and adds freight,
+              insurance & other costs. Click <strong>Use</strong> to apply it as
+              the customs value above.
             </p>
           </div>
           <p className="mt-2 text-[11px] text-slate-400">
