@@ -27,7 +27,10 @@ import {
   resolveExciseRate,
 } from "@/lib/calc";
 
-const STORAGE_KEY = "car-import-calc:v5";
+const STORAGE_KEY = "car-import-calc:v6";
+
+const MCB_RATES_URL = "https://www.mcb.mu";
+const MRA_FOB_URL = "http://eservices6.mra.mu/choice.asp";
 
 interface Persisted {
   carName: string;
@@ -38,6 +41,7 @@ interface Persisted {
   subTypeId: string;
   cc: number;
   powerKw: number;
+  assessedFobJpy: number;
   customsValue: number;
   icdRate: number;
   items: LineItem[];
@@ -61,13 +65,14 @@ const GROUP_ORDER: CostGroup[] = ["taxes", "shipping", "preparation", "other"];
 export default function Home() {
   const [loaded, setLoaded] = useState(false);
   const [carName, setCarName] = useState("");
-  const [cifJpy, setCifJpy] = useState(1680000);
-  const [jpyRate, setJpyRate] = useState(0.29);
+  const [cifJpy, setCifJpy] = useState(1520000);
+  const [jpyRate, setJpyRate] = useState(0.32);
   const [category, setCategory] = useState<VehicleCategory>("car");
   const [powertrainId, setPowertrainId] = useState("hybrid");
   const [subTypeId, setSubTypeId] = useState("standard");
   const [cc, setCc] = useState(1490);
   const [powerKw, setPowerKw] = useState(100);
+  const [assessedFobJpy, setAssessedFobJpy] = useState(0);
   const [customsValue, setCustomsValue] = useState(347956);
   const [icdRate, setIcdRate] = useState(DEFAULT_ICD_RATE);
   const [items, setItems] = useState<LineItem[]>(defaultLineItems());
@@ -91,6 +96,7 @@ export default function Home() {
     if (s.subTypeId !== undefined) setSubTypeId(s.subTypeId);
     if (s.cc !== undefined) setCc(s.cc);
     if (s.powerKw !== undefined) setPowerKw(s.powerKw);
+    if (s.assessedFobJpy !== undefined) setAssessedFobJpy(s.assessedFobJpy);
     if (s.customsValue !== undefined) setCustomsValue(s.customsValue);
     if (s.icdRate !== undefined) setIcdRate(s.icdRate);
     if (s.items) setItems(s.items);
@@ -112,6 +118,7 @@ export default function Home() {
       subTypeId,
       cc,
       powerKw,
+      assessedFobJpy,
       customsValue,
       icdRate,
       items,
@@ -134,6 +141,7 @@ export default function Home() {
     subTypeId,
     cc,
     powerKw,
+    assessedFobJpy,
     customsValue,
     icdRate,
     items,
@@ -143,6 +151,10 @@ export default function Home() {
   ]);
 
   const cifMru = useMemo(() => Math.round(cifJpy * jpyRate), [cifJpy, jpyRate]);
+  const assessedFobMru = useMemo(
+    () => Math.round(assessedFobJpy * jpyRate),
+    [assessedFobJpy, jpyRate],
+  );
 
   // Resolve the currently selected powertrain / sub-type with safe fallbacks.
   const powertrains: Powertrain[] = exciseSchedule[category];
@@ -235,13 +247,14 @@ export default function Home() {
   function resetAll() {
     if (!confirm("Reset all inputs to the default example car?")) return;
     setCarName("");
-    setCifJpy(1680000);
-    setJpyRate(0.29);
+    setCifJpy(1520000);
+    setJpyRate(0.32);
     setCategory("car");
     setPowertrainId("hybrid");
     setSubTypeId("standard");
     setCc(1490);
     setPowerKw(100);
+    setAssessedFobJpy(0);
     setCustomsValue(347956);
     setIcdRate(DEFAULT_ICD_RATE);
     setItems(defaultLineItems());
@@ -352,7 +365,7 @@ export default function Home() {
               className="input"
             />
           </Field>
-          <Field label="Exchange rate (1 JPY → MUR)">
+          <Field label="MCB selling rate (1 JPY → MUR)">
             <input
               type="number"
               step="0.0001"
@@ -360,6 +373,14 @@ export default function Home() {
               onChange={(e) => setJpyRate(Number(e.target.value))}
               className="input"
             />
+            <a
+              href={MCB_RATES_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="no-print mt-1 inline-block text-[11px] font-medium text-brand hover:underline"
+            >
+              Check MCB rates ↗
+            </a>
           </Field>
         </div>
         <div className="mt-4 flex items-center justify-between rounded-lg bg-teal-50 px-4 py-3 ring-1 ring-teal-100">
@@ -420,6 +441,50 @@ export default function Home() {
                 className="input"
               />
             </Field>
+          </div>
+
+          {/* Assessed FOB (JPY) from MRA e-Services -> customs value */}
+          <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white/60 p-3">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="min-w-[10rem] flex-1">
+                <span className="mb-1 block text-xs font-medium text-slate-500">
+                  Assessed FOB value (JPY) — from MRA e-Services
+                </span>
+                <input
+                  type="number"
+                  value={assessedFobJpy || ""}
+                  onChange={(e) => setAssessedFobJpy(Number(e.target.value))}
+                  placeholder="e.g. 953484"
+                  className="input"
+                />
+              </div>
+              <div className="pb-1 text-xs text-slate-500">
+                × {jpyRate} ={" "}
+                <span className="font-semibold text-slate-700 tabular-nums">
+                  {formatRs(assessedFobMru)}
+                </span>
+              </div>
+              <button
+                onClick={() => setCustomsValue(assessedFobMru)}
+                disabled={!assessedFobJpy}
+                className="no-print rounded-lg bg-brand px-3 py-2 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-40"
+              >
+                Use as customs value
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-400">
+              Look up the assessed FOB value in JPY on{" "}
+              <a
+                href={MRA_FOB_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-brand hover:underline"
+              >
+                MRA e-Services ↗
+              </a>
+              , then convert it here. Customs may add freight, insurance and other
+              costs on top — adjust the Rs value above if needed.
+            </p>
           </div>
           <p className="mt-2 text-[11px] text-slate-400">
             MRA assesses its own customs value (often lower than the price paid).

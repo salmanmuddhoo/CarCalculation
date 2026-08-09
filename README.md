@@ -6,8 +6,8 @@ configuration.
 
 ## What it does
 
-- Converts the **CIF cost in JPY** to Mauritian Rupees using an editable
-  JPY → MUR exchange rate.
+- Converts the **CIF cost in JPY** to Mauritian Rupees using the **MCB selling
+  rate** (editable; defaults to 0.32, with a link to check MCB's rates).
 - Estimates **excise duty + VAT**, **registration fee**, and **road tax** from
   the engine capacity (cc) using editable rate tables.
 - Lets you enter every real-world charge as an editable line item
@@ -38,8 +38,11 @@ Two things matter here:
   (HS `8703.40.93`) is charged **35% excise**.
 - **Customs value ≠ price paid.** MRA assesses its own customs value (in the
   verified case Rs 347,956, versus Rs 487,013 actually paid), and duty is based
-  on that assessed value. Enter it separately, or click **“= CIF”** to start
-  from the converted price.
+  on that assessed value. Look up the **assessed FOB value in JPY** on
+  [MRA e-Services](http://eservices6.mra.mu/choice.asp), enter it in the app to
+  convert to Rs at the MCB rate, then click **“Use as customs value”**. You can
+  also enter the Rs value directly or click **“= CIF”**. Customs may add
+  freight, insurance and other costs on top — adjust if needed.
 
 The app covers **motor cars, pick-ups, vans and lorries**. Pick the vehicle
 category, powertrain, and (where relevant) body/cabin type — the matching
