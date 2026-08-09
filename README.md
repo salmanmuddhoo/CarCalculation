@@ -38,11 +38,32 @@ Two things matter here:
   (HS `8703.40.93`) is charged **35% excise**.
 - **Customs value ≠ price paid.** MRA assesses its own customs value (in the
   verified case Rs 347,956, versus Rs 487,013 actually paid), and duty is based
-  on that assessed value. Look up the **assessed FOB value in JPY** on
-  [MRA e-Services](http://eservices6.mra.mu/choice.asp), enter it in the app to
-  convert to Rs at the MCB rate, then click **“Use as customs value”**. You can
-  also enter the Rs value directly or click **“= CIF”**. Customs may add
-  freight, insurance and other costs on top — adjust if needed.
+  on that assessed value. The app includes a **CIF builder** that reproduces how
+  the declaration arrives at it:
+
+  ```
+  Assessed FOB (JPY)  ×  customs FX rate   =  FOB in rupees
+  FOB in rupees  +  freight  +  insurance  +  other costs  =  customs value (CIF)
+  ```
+
+  Worked from the sample declaration:
+
+  | Component | Value |
+  | --------- | ----- |
+  | Assessed FOB (from MRA e-Services) | 953,484 JPY |
+  | Customs FX rate (its own, ≠ MCB) | 0.315 |
+  | FOB in rupees | 300,347 |
+  | + Freight | 40,950 |
+  | + Insurance | 5,142 |
+  | + Other costs | 1,517 |
+  | **Customs value (CIF)** | **347,956** |
+
+  Look up the assessed FOB in JPY on
+  [MRA e-Services](http://eservices6.mra.mu/choice.asp), fill the builder, and
+  click **Use**. Note customs converts the FOB at **its own exchange rate**
+  (0.315 here), which differs from the MCB selling rate you pay. The customs
+  value field also stays editable, or you can click **“= paid”** to seed it from
+  the price paid.
 
 The app covers **motor cars, pick-ups, vans and lorries**. Pick the vehicle
 category, powertrain, and (where relevant) body/cabin type — the matching
